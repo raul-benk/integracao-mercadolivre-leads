@@ -1,0 +1,17 @@
+@import "@zoitechnologies/ds/styles/theme.css";
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: linear-gradient(135deg, #fafffe 0%, #f7fff2 50%, #ffffff 100%);
+}
+
+#root {
+  min-height: 100vh;
+}

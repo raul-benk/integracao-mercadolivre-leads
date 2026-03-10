@@ -21,6 +21,10 @@ if [ ! -f "${SHARED_DIR}/tokens/tokens.json" ]; then
   echo "{}" | sudo tee "${SHARED_DIR}/tokens/tokens.json" >/dev/null
 fi
 
+if [ ! -f "${SHARED_DIR}/tokens/authorizations.json" ]; then
+  echo "[]" | sudo tee "${SHARED_DIR}/tokens/authorizations.json" >/dev/null
+fi
+
 if [ ! -f "${SHARED_DIR}/config/.env" ]; then
   sudo tee "${SHARED_DIR}/config/.env" >/dev/null <<'EOF'
 PORT=7254
@@ -31,6 +35,8 @@ MELI_TOKENS_FILE=/var/www/integrador.zoitech.com.br/meli-oauth/shared/tokens/tok
 MELI_NOTIFICATIONS_PATH=/notifications
 MELI_NOTIFICATIONS_URL=https://integrador.zoitech.com.br/meli/notifications
 MELI_NOTIFICATIONS_FILE=/var/www/integrador.zoitech.com.br/meli-oauth/shared/logs/notifications.log
+MELI_AUTHORIZATIONS_FILE=/var/www/integrador.zoitech.com.br/meli-oauth/shared/tokens/authorizations.json
+MELI_ADMIN_DASHBOARD_TOKEN=troque-por-um-token-forte
 EOF
 fi
 
@@ -39,6 +45,7 @@ echo "Directory structure prepared."
 echo "Base: ${BASE_DIR}"
 echo "Shared env: ${SHARED_DIR}/config/.env"
 echo "Shared tokens: ${SHARED_DIR}/tokens/tokens.json"
+echo "Shared authorizations: ${SHARED_DIR}/tokens/authorizations.json"
 echo
 echo "Next step: copy project files to a release dir and point current symlink to that release."
 echo "Example:"

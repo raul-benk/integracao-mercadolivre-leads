@@ -2,3 +2,7 @@ node_modules
 .env
 tokens.json
 notifications.log
+authorizations.json
+.DS_Store
+public/mercado-livre-oauth-admin/.env.local
+public/oauth-callback-result/.env.local

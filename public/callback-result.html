@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>__PAGE_TITLE__</title>
+  <link rel="stylesheet" href="/assets/zoi/theme.css">
+  <style>
+    :root {
+      --panel-border: rgba(20, 20, 20, 0.1);
+      --panel-bg: rgba(255, 255, 255, 0.92);
+      --panel-shadow: 0 20px 56px rgba(20, 20, 20, 0.08);
+      --danger-soft: rgba(243, 107, 99, 0.18);
+      --success-soft: rgba(181, 255, 129, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: var(--space-5);
+      background:
+        radial-gradient(circle at 0% 0%, rgba(181, 255, 129, 0.28), transparent 28%),
+        linear-gradient(180deg, #f5faf3 0%, #fbfdf9 45%, #ffffff 100%);
+      color: var(--text-primary);
+    }
+
+    body[data-status="error"] {
+      background:
+        radial-gradient(circle at 0% 0%, rgba(243, 107, 99, 0.2), transparent 30%),
+        linear-gradient(180deg, #f8f1f0 0%, #fcf9f8 45%, #ffffff 100%);
+    }
+
+    .result-shell {
+      width: min(56rem, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .result-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 1rem;
+      background: var(--panel-bg);
+      box-shadow: var(--panel-shadow);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: clamp(1.2rem, 2.8vw, 2rem);
+      background:
+        linear-gradient(135deg, rgba(18, 22, 25, 0.95), rgba(38, 45, 49, 0.9)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+      color: #ffffff;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .hero.is-error {
+      background:
+        linear-gradient(135deg, rgba(54, 20, 19, 0.97), rgba(80, 31, 28, 0.9)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+    }
+
+    .hero h1,
+    .hero p,
+    .hero strong,
+    .hero code,
+    .hero span {
+      margin: 0;
+      color: #ffffff;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      width: fit-content;
+      padding: 0.35rem 0.7rem;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.86) !important;
+    }
+
+    .status-badge::before {
+      content: "";
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: var(--green-400);
+      box-shadow: 0 0 12px rgba(181, 255, 129, 0.75);
+    }
+
+    .hero.is-error .status-badge::before {
+      background: #f36b63;
+      box-shadow: 0 0 12px rgba(243, 107, 99, 0.7);
+    }
+
+    .hero h1 {
+      font-size: clamp(1.85rem, 5vw, 3rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      color: rgba(255, 255, 255, 0.74) !important;
+      max-width: 60ch;
+    }
+
+    .status-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      width: fit-content;
+      padding: 0.45rem 0.72rem;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.07);
+      font-size: 0.84rem;
+    }
+
+    .status-inline span {
+      color: rgba(255, 255, 255, 0.7);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-3);
+      padding: var(--space-4);
+      border-bottom: 1px solid rgba(20, 20, 20, 0.08);
+      background: rgba(255, 255, 255, 0.64);
+    }
+
+    .summary-item {
+      padding: 0.75rem;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      background: rgba(20, 20, 20, 0.03);
+      min-width: 0;
+    }
+
+    .summary-item span {
+      display: block;
+      margin-bottom: 0.3rem;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.7rem;
+    }
+
+    .summary-item strong {
+      display: block;
+      line-height: 1.35;
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: var(--space-3);
+      padding: var(--space-4);
+    }
+
+    .content-card {
+      padding: var(--space-4);
+      border-radius: 0.8rem;
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      background: rgba(255, 255, 255, 0.72);
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .content-card h2 {
+      margin: 0;
+      font-size: 1.2rem;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .content-card p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .details-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      display: grid;
+      gap: 0.36rem;
+      color: var(--text-secondary);
+    }
+
+    .next-step-card {
+      background:
+        linear-gradient(180deg, var(--success-soft), rgba(255, 255, 255, 0.72)),
+        rgba(255, 255, 255, 0.72);
+    }
+
+    body[data-status="error"] .next-step-card {
+      background:
+        linear-gradient(180deg, var(--danger-soft), rgba(255, 255, 255, 0.72)),
+        rgba(255, 255, 255, 0.72);
+    }
+
+    .success-only,
+    .error-only {
+      display: block;
+    }
+
+    body[data-status="success"] .error-only,
+    body[data-status="error"] .success-only {
+      display: none;
+    }
+
+    .actions {
+      padding: 0 var(--space-4) var(--space-4);
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .actions .btn {
+      flex: 1 1 11rem;
+    }
+
+    .helper-stack {
+      display: grid;
+      gap: var(--space-1);
+    }
+
+    .helper-note {
+      margin: 0;
+      text-align: center;
+      color: var(--text-tertiary);
+    }
+
+    .feedback-note {
+      min-height: 1.4em;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.9em;
+      color: inherit;
+    }
+
+    @media (max-width: 860px) {
+      .summary-grid,
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      body {
+        padding: var(--space-3);
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="result-shell">
+    <section class="result-card">
+      <header class="hero __STATUS_CLASS__">
+        <p class="status-badge text-body-sm">__BADGE__</p>
+        <h1>__HEADLINE__</h1>
+        <p class="text-body-md">__MESSAGE__</p>
+        <div class="status-inline">
+          <span>Resultado</span>
+          <strong>__STATUS_WORD__</strong>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="Resumo do callback">
+        <article class="summary-item">
+          <span>Resultado</span>
+          <strong>__STATUS_WORD__</strong>
+        </article>
+        <article class="summary-item">
+          <span>Usuario</span>
+          <strong><code>__USER_ID__</code></strong>
+        </article>
+        <article class="summary-item">
+          <span>Expiracao</span>
+          <strong><code>__EXPIRES_AT__</code></strong>
+        </article>
+        <article class="summary-item">
+          <span>Scopes</span>
+          <strong><code>__SCOPE_COUNT__</code> autorizacoes</strong>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="content-card">
+          <h2>__DETAILS_TITLE__</h2>
+          <ul class="details-list text-body-sm">
+            __DETAILS_ITEMS__
+          </ul>
+        </article>
+
+        <article class="content-card next-step-card">
+          <h2>Proximo passo</h2>
+          <p class="text-body-sm success-only">Fluxo concluido. Voce pode seguir para o status da integracao ou fechar esta janela.</p>
+          <p class="text-body-sm error-only">Fluxo interrompido. Gere uma nova autorizacao e valide o diagnostico antes de repetir.</p>
+          <button class="btn btn-secondary" id="closeWindowButton" type="button">Fechar janela</button>
+        </article>
+      </section>
+
+      <div class="actions">
+        <a class="btn btn-primary" href="__PRIMARY_HREF__">__PRIMARY_LABEL__</a>
+        <a class="btn btn-outline" href="__SECONDARY_HREF__">__SECONDARY_LABEL__</a>
+        <button class="btn btn-secondary" id="copySummaryButton" type="button">Copiar resumo</button>
+      </div>
+    </section>
+
+    <div class="helper-stack">
+      <p class="helper-note text-body-sm">Versao API: adicione <code>?format=json</code> na URL do callback.</p>
+      <p class="helper-note feedback-note text-body-sm" id="actionFeedback" aria-live="polite"></p>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      var body = document.body;
+      var hero = document.querySelector(".hero");
+      var copySummaryButton = document.getElementById("copySummaryButton");
+      var closeWindowButton = document.getElementById("closeWindowButton");
+      var actionFeedback = document.getElementById("actionFeedback");
+      var status = hero && hero.classList.contains("is-error") ? "error" : "success";
+
+      body.dataset.status = status;
+
+      function setFeedback(message) {
+        if (actionFeedback) {
+          actionFeedback.textContent = message;
+        }
+      }
+
+      function buildSummary() {
+        var headline = (hero && hero.querySelector("h1") && hero.querySelector("h1").textContent) || "";
+        var summaryTiles = Array.prototype.slice.call(document.querySelectorAll(".summary-item"));
+        var summary = summaryTiles.map(function (tile) {
+          var label = tile.querySelector("span");
+          var value = tile.querySelector("strong");
+          return (label ? label.textContent : "") + ": " + (value ? value.textContent : "");
+        }).join(" | ");
+
+        return [headline, summary].filter(Boolean).join(" | ");
+      }
+
+      if (copySummaryButton) {
+        copySummaryButton.addEventListener("click", function () {
+          var summary = buildSummary();
+
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(summary).then(function () {
+              setFeedback("Resumo copiado para a area de transferencia.");
+            }).catch(function () {
+              window.prompt("Copie o resumo do callback:", summary);
+            });
+            return;
+          }
+
+          window.prompt("Copie o resumo do callback:", summary);
+        });
+      }
+
+      if (closeWindowButton) {
+        closeWindowButton.addEventListener("click", function () {
+          setFeedback("Tentando fechar a janela...");
+          window.close();
+
+          window.setTimeout(function () {
+            setFeedback("Se a aba continuar aberta, feche manualmente.");
+          }, 240);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

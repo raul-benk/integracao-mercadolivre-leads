@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import '@zoitechnologies/ds/styles/theme.css';
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-body);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Mapeia as utilitarias atuais para a identidade ZOI */
+  --color-slate-950: #0e120f;
+  --color-slate-900: var(--neutral-900);
+  --color-slate-800: var(--neutral-850);
+  --color-slate-700: var(--neutral-700);
+  --color-slate-600: var(--neutral-600);
+  --color-slate-500: var(--neutral-500);
+  --color-slate-400: var(--neutral-300);
+  --color-slate-300: var(--neutral-200);
+  --color-slate-200: var(--neutral-100);
+
+  --color-indigo-900: var(--green-900);
+  --color-indigo-600: var(--green-400);
+  --color-indigo-500: var(--green-500);
+  --color-indigo-400: #9de66e;
+  --color-indigo-300: #c8ffa7;
+
+  --color-emerald-500: var(--system-success);
+  --color-emerald-400: #66bb6a;
+  --color-rose-500: var(--system-error);
+  --color-rose-400: #ef5350;
+  --color-amber-500: var(--system-warning);
+  --color-amber-400: #ffb74d;
+}
+
+:root {
+  --zoi-glow-soft: rgba(181, 255, 129, 0.1);
+  --zoi-glow: rgba(181, 255, 129, 0.18);
+}
+
+body {
+  background: linear-gradient(135deg, #0a0f0a 0%, #141414 50%, #0d1f0d 100%);
+  background-attachment: fixed;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: -40%;
+  right: -18%;
+  width: 36rem;
+  height: 36rem;
+  background: radial-gradient(circle, var(--zoi-glow) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--zoi-glow-soft);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(20, 20, 20, 0.7);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(181, 255, 129, 0.28);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(181, 255, 129, 0.45);
+}

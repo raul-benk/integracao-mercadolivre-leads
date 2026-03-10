@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>__PAGE_TITLE__</title>
+  <link rel="stylesheet" href="/assets/zoi/theme.css">
+  <style>
+    :root {
+      --panel-border: rgba(20, 20, 20, 0.1);
+      --panel-bg: rgba(255, 255, 255, 0.9);
+      --panel-bg-strong: rgba(255, 255, 255, 0.96);
+      --panel-shadow: 0 18px 48px rgba(20, 20, 20, 0.08);
+      --success-soft: rgba(181, 255, 129, 0.22);
+      --warning-soft: rgba(251, 140, 0, 0.16);
+      --danger-soft: rgba(229, 57, 53, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: var(--space-5);
+      background:
+        radial-gradient(circle at 0% 0%, rgba(181, 255, 129, 0.28), transparent 28%),
+        linear-gradient(180deg, #f6fbf4 0%, #fcfdfb 40%, #ffffff 100%);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(to right, rgba(20, 20, 20, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(20, 20, 20, 0.02) 1px, transparent 1px);
+      background-size: 2rem 2rem;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent 75%);
+    }
+
+    .dashboard-shell {
+      width: min(76rem, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: var(--space-4);
+      position: relative;
+      z-index: 1;
+    }
+
+    .panel {
+      border: 1px solid var(--panel-border);
+      border-radius: 1rem;
+      background: var(--panel-bg);
+      box-shadow: var(--panel-shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: clamp(1.2rem, 2.8vw, 2rem);
+      background:
+        linear-gradient(135deg, rgba(18, 22, 25, 0.95), rgba(38, 45, 49, 0.9)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.08);
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .hero h1,
+    .hero p,
+    .hero strong,
+    .hero code {
+      margin: 0;
+      color: #ffffff;
+    }
+
+    .hero-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-4);
+      align-items: start;
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+      padding: 0.35rem 0.7rem;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.82) !important;
+    }
+
+    .hero-kicker::before {
+      content: "";
+      width: 0.48rem;
+      height: 0.48rem;
+      border-radius: 50%;
+      background: var(--green-400);
+      box-shadow: 0 0 12px rgba(181, 255, 129, 0.75);
+    }
+
+    .hero-title {
+      margin: 0 0 var(--space-2);
+      font-size: clamp(1.85rem, 5vw, 3rem);
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      color: #ffffff;
+    }
+
+    .hero-subtitle {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.72) !important;
+      max-width: 56ch;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      justify-content: flex-end;
+      align-self: end;
+    }
+
+    .hero-actions .btn {
+      min-width: 10rem;
+    }
+
+    .copy-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4) var(--space-5);
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      font-family: var(--font-display);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color var(--duration-fast) var(--ease-out);
+    }
+
+    .copy-button:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0.45rem 0.75rem;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 0.84rem;
+    }
+
+    .hero-feedback {
+      min-height: 1.4em;
+      color: rgba(255, 255, 255, 0.74) !important;
+    }
+
+    .summary-panel {
+      padding: var(--space-5);
+      display: grid;
+      gap: var(--space-4);
+      background: var(--panel-bg-strong);
+    }
+
+    .summary-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: var(--space-3);
+    }
+
+    .summary-head h2 {
+      margin: 0;
+      font-size: 1.4rem;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+    }
+
+    .summary-head p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .status-pill-main {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-default);
+      background: rgba(20, 20, 20, 0.04);
+      color: var(--text-secondary);
+      font-size: 0.84rem;
+      white-space: nowrap;
+    }
+
+    .status-pill-main::before {
+      content: "";
+      width: 0.52rem;
+      height: 0.52rem;
+      border-radius: 50%;
+      background: var(--green-500);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--space-3);
+    }
+
+    .stat {
+      padding: var(--space-4);
+      border-radius: 0.8rem;
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      background: rgba(20, 20, 20, 0.03);
+    }
+
+    .stat span {
+      display: block;
+      margin-bottom: var(--space-2);
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.74rem;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.55rem;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      font-family: var(--font-display);
+    }
+
+    .distribution {
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .distribution-item {
+      display: grid;
+      gap: 0.4rem;
+    }
+
+    .distribution-item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    .distribution-track {
+      height: 0.55rem;
+      border-radius: var(--radius-full);
+      background: rgba(20, 20, 20, 0.08);
+      overflow: hidden;
+    }
+
+    .distribution-fill {
+      height: 100%;
+      border-radius: inherit;
+    }
+
+    .distribution-fill.is-active {
+      background: linear-gradient(90deg, #b5ff81, #84cc5a);
+      width: __ACTIVE_PERCENT__%;
+    }
+
+    .distribution-fill.is-expired {
+      background: linear-gradient(90deg, #f69c95, #f36b63);
+      width: __EXPIRED_PERCENT__%;
+    }
+
+    .distribution-fill.is-timeless {
+      background: linear-gradient(90deg, #ffd48d, #f7b84e);
+      width: __TIMELESS_PERCENT__%;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.75fr);
+      gap: var(--space-4);
+    }
+
+    .history-panel {
+      padding: var(--space-5);
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .history-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: var(--space-3);
+    }
+
+    .history-head h2 {
+      margin: 0 0 var(--space-2);
+      font-size: 1.5rem;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+    }
+
+    .history-head p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .visible-meta {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .visible-meta span {
+      display: block;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.74rem;
+    }
+
+    .visible-meta strong {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 1.85rem;
+      line-height: 0.92;
+      letter-spacing: -0.03em;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-3);
+      align-items: center;
+    }
+
+    .search-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      border: 1px solid var(--border-default);
+      border-radius: 0.8rem;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .search-input {
+      width: 100%;
+      border: 0;
+      outline: none;
+      background: transparent;
+      padding: 0.75rem 0.9rem;
+      color: var(--text-primary);
+      font-size: 0.96rem;
+      font-family: var(--font-body);
+    }
+
+    .search-input::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .search-reset {
+      border: 0;
+      border-left: 1px solid var(--border-default);
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 0 0.9rem;
+      font-size: 0.84rem;
+      cursor: pointer;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      justify-content: flex-end;
+    }
+
+    .filter-chip {
+      border: 1px solid var(--border-default);
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 0.42rem 0.72rem;
+      border-radius: var(--radius-full);
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+    }
+
+    .filter-chip.is-active {
+      border-color: var(--neutral-900);
+      background: rgba(20, 20, 20, 0.08);
+      color: var(--text-primary);
+    }
+
+    .toolbar-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .toolbar-feedback {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .toolbar-reset {
+      border: 0;
+      padding: 0;
+      background: none;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 0.2rem;
+    }
+
+    .integration-grid {
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .integration-card {
+      padding: var(--space-4);
+      border-radius: 0.9rem;
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      background: rgba(255, 255, 255, 0.92);
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .integration-card.is-current {
+      border-color: rgba(181, 255, 129, 0.42);
+      box-shadow: inset 0 0 0 1px rgba(181, 255, 129, 0.28);
+    }
+
+    .integration-card__header {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+      align-items: start;
+    }
+
+    .integration-card__identity {
+      display: flex;
+      gap: var(--space-3);
+      align-items: center;
+      min-width: 0;
+    }
+
+    .user-badge {
+      width: 2.1rem;
+      height: 2.1rem;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-display);
+      font-size: 0.82rem;
+      background: rgba(20, 20, 20, 0.08);
+      color: var(--text-primary);
+      flex-shrink: 0;
+    }
+
+    .integration-card__eyebrow {
+      margin: 0 0 0.2rem;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.7rem;
+    }
+
+    .integration-card__title {
+      margin: 0;
+      font-size: 1.08rem;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      overflow-wrap: anywhere;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 6.6rem;
+      padding: 0.32rem 0.62rem;
+      border-radius: var(--radius-full);
+      font-size: 0.78rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .status-pill.is-active {
+      background: var(--success-soft);
+      border-color: rgba(181, 255, 129, 0.55);
+      color: #355022;
+    }
+
+    .status-pill.is-expired {
+      background: var(--danger-soft);
+      border-color: rgba(229, 57, 53, 0.35);
+      color: #7f2523;
+    }
+
+    .status-pill.is-timeless {
+      background: var(--warning-soft);
+      border-color: rgba(251, 140, 0, 0.35);
+      color: #7b4a14;
+    }
+
+    .integration-card__grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-2);
+    }
+
+    .info-tile {
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 0.7rem;
+      padding: 0.6rem 0.7rem;
+      background: rgba(20, 20, 20, 0.03);
+      min-width: 0;
+    }
+
+    .info-tile__label {
+      display: block;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.68rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .info-tile__value {
+      display: block;
+      font-size: 0.86rem;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .integration-card__scope {
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 0.7rem;
+      padding: 0.6rem 0.7rem;
+      background: rgba(20, 20, 20, 0.03);
+    }
+
+    .integration-card__scope-text {
+      margin: 0;
+      color: var(--text-secondary);
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .integration-card__details {
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 0.7rem;
+      background: rgba(20, 20, 20, 0.02);
+      overflow: hidden;
+    }
+
+    .integration-card__details summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 0.62rem 0.72rem;
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+
+    .integration-card__details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-2);
+      padding: 0 0.72rem 0.72rem;
+    }
+
+    .detail-chip {
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 0.62rem;
+      background: #ffffff;
+      padding: 0.55rem 0.62rem;
+      min-width: 0;
+    }
+
+    .detail-chip--wide {
+      grid-column: 1 / -1;
+    }
+
+    .detail-chip span {
+      display: block;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.66rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .detail-chip code {
+      display: block;
+      word-break: break-word;
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+    }
+
+    .empty-state {
+      border: 1px dashed rgba(20, 20, 20, 0.22);
+      border-radius: 0.9rem;
+      padding: var(--space-5);
+      text-align: center;
+      background: rgba(20, 20, 20, 0.02);
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .empty-state strong {
+      font-size: 1rem;
+    }
+
+    .empty-state p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .empty-state-actions {
+      display: flex;
+      justify-content: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: var(--space-3);
+      align-content: start;
+    }
+
+    .side-card {
+      padding: var(--space-4);
+      display: grid;
+      gap: var(--space-3);
+      background: var(--panel-bg-strong);
+    }
+
+    .side-card h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .side-card p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .side-list {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .side-row {
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 0.7rem;
+      background: rgba(20, 20, 20, 0.03);
+      padding: 0.58rem 0.66rem;
+    }
+
+    .side-row span {
+      display: block;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.68rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .side-row strong {
+      display: block;
+      font-size: 0.86rem;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .config-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: var(--text-secondary);
+      display: grid;
+      gap: 0.32rem;
+    }
+
+    .side-details {
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 0.7rem;
+      background: rgba(20, 20, 20, 0.03);
+      overflow: hidden;
+    }
+
+    .side-details summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 0.6rem 0.66rem;
+      color: var(--text-secondary);
+      font-size: 0.84rem;
+    }
+
+    .side-details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .side-details-content {
+      padding: 0 0.66rem 0.66rem;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.9em;
+      color: inherit;
+    }
+
+    .footer-note {
+      margin: 0;
+      text-align: center;
+      color: var(--text-tertiary);
+    }
+
+    @media (max-width: 1080px) {
+      .workspace,
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .filter-group {
+        justify-content: flex-start;
+      }
+
+      .history-head,
+      .summary-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .hero-top {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-actions {
+        justify-content: flex-start;
+      }
+
+      .visible-meta {
+        text-align: left;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: var(--space-3);
+      }
+
+      .stats-grid,
+      .integration-card__grid,
+      .details-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .empty-state-actions,
+      .hero-actions {
+        flex-direction: column;
+      }
+
+      .hero-actions .btn,
+      .hero-actions .copy-button,
+      .empty-state-actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="dashboard-shell">
+    <header class="panel hero">
+      <div class="hero-top">
+        <div>
+          <p class="hero-kicker text-body-sm">Mercado Livre / Admin</p>
+          <h1 class="hero-title">Integracoes OAuth</h1>
+          <p class="hero-subtitle text-body-md">
+            Visao direta do estado atual: token ativo, saude do historico e registros de autorizacao.
+          </p>
+        </div>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="/auth/start">Nova autorizacao</a>
+          <a class="btn btn-outline" href="/auth/status">Diagnostico</a>
+          <button class="copy-button" id="copyCurrentLink" type="button">Copiar URL protegida</button>
+        </div>
+      </div>
+
+      <div class="hero-meta">
+        <span class="meta-chip">Ultimo usuario <strong><code>__LATEST_USER_ID__</code></strong></span>
+        <span class="meta-chip">Ultimo callback <strong><code>__LATEST_AUTHORIZED_AT__</code></strong></span>
+        <span class="meta-chip">Subpath publico <strong><code>__PUBLIC_DASHBOARD_PATH__</code></strong></span>
+      </div>
+
+      <p class="hero-feedback text-body-sm" id="copyCurrentLinkFeedback" aria-live="polite">
+        O link copiado preserva o acesso desta sessao quando voce entrou com <code>?token=</code>.
+      </p>
+    </header>
+
+    <section class="panel summary-panel">
+      <div class="summary-head">
+        <div>
+          <h2>Resumo rapido</h2>
+          <p class="text-body-sm">Estado do historico e do token operacional atual.</p>
+        </div>
+        <span class="status-pill-main">Token atual: <strong><code>__CURRENT_TOKEN_STATUS__</code></strong></span>
+      </div>
+
+      <div class="stats-grid">
+        <article class="stat">
+          <span>Autorizacoes</span>
+          <strong>__TOTAL_AUTHORIZATIONS__</strong>
+        </article>
+        <article class="stat">
+          <span>Usuarios unicos</span>
+          <strong>__UNIQUE_USERS__</strong>
+        </article>
+        <article class="stat">
+          <span>Ativas</span>
+          <strong>__ACTIVE_AUTHORIZATIONS__</strong>
+        </article>
+        <article class="stat">
+          <span>Expiradas</span>
+          <strong>__EXPIRED_AUTHORIZATIONS__</strong>
+        </article>
+        <article class="stat">
+          <span>Sem expiracao</span>
+          <strong>__TIMELESS_AUTHORIZATIONS__</strong>
+        </article>
+      </div>
+
+      <div class="distribution">
+        <div class="distribution-item">
+          <div class="distribution-item-head">
+            <span>Ativas</span>
+            <strong>__ACTIVE_PERCENT__%</strong>
+          </div>
+          <div class="distribution-track">
+            <div class="distribution-fill is-active"></div>
+          </div>
+        </div>
+
+        <div class="distribution-item">
+          <div class="distribution-item-head">
+            <span>Expiradas</span>
+            <strong>__EXPIRED_PERCENT__%</strong>
+          </div>
+          <div class="distribution-track">
+            <div class="distribution-fill is-expired"></div>
+          </div>
+        </div>
+
+        <div class="distribution-item">
+          <div class="distribution-item-head">
+            <span>Sem expiracao</span>
+            <strong>__TIMELESS_PERCENT__%</strong>
+          </div>
+          <div class="distribution-track">
+            <div class="distribution-fill is-timeless"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <section class="panel history-panel">
+        <div class="history-head">
+          <div>
+            <h2>Historico de autorizacoes</h2>
+            <p class="text-body-sm">Filtre por status, conta ou termos de scope.</p>
+          </div>
+
+          <div class="visible-meta">
+            <span>Resultados</span>
+            <strong id="visibleCount">__TOTAL_AUTHORIZATIONS__</strong>
+            <span id="visibleLabel">integracoes visiveis</span>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <label class="search-shell" for="searchInput">
+            <input
+              class="search-input"
+              id="searchInput"
+              type="search"
+              placeholder="Buscar por usuario, scope ou token..."
+              autocomplete="off"
+            >
+            <button class="search-reset" id="clearSearch" type="button" hidden>Limpar</button>
+          </label>
+
+          <div class="filter-group" role="group" aria-label="Filtros de status">
+            <button class="filter-chip is-active" type="button" data-filter="all" aria-pressed="true">Todas</button>
+            <button class="filter-chip" type="button" data-filter="active" aria-pressed="false">Ativas</button>
+            <button class="filter-chip" type="button" data-filter="expired" aria-pressed="false">Expiradas</button>
+            <button class="filter-chip" type="button" data-filter="timeless" aria-pressed="false">Sem expiracao</button>
+            <button class="filter-chip" type="button" data-filter="current" aria-pressed="false">Token atual</button>
+          </div>
+        </div>
+
+        <div class="toolbar-meta">
+          <p class="toolbar-feedback text-body-sm" id="filterFeedback" aria-live="polite">Mostrando todo o historico.</p>
+          <button class="toolbar-reset text-body-sm" id="clearFilters" type="button" hidden>Limpar busca e filtros</button>
+        </div>
+
+        <div class="integration-grid" id="integrationGrid">
+          __INTEGRATION_CARDS__
+        </div>
+
+        <div class="empty-state" id="emptyState" hidden>
+          <strong>Nenhum registro encontrado</strong>
+          <p class="text-body-sm" id="emptyStateText">Altere os filtros para voltar a exibir o historico.</p>
+          <div class="empty-state-actions">
+            <button class="btn btn-outline" id="resetEmptyState" type="button">Limpar busca e filtros</button>
+            <a class="btn btn-secondary" href="/auth/start">Nova autorizacao</a>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-stack">
+        <article class="panel side-card">
+          <h2>Token em uso</h2>
+          <div class="side-list">
+            <div class="side-row">
+              <span>Status</span>
+              <strong><code>__CURRENT_TOKEN_STATUS__</code></strong>
+            </div>
+            <div class="side-row">
+              <span>Usuario atual</span>
+              <strong><code>__CURRENT_USER_ID__</code></strong>
+            </div>
+            <div class="side-row">
+              <span>Expira em</span>
+              <strong><code>__CURRENT_EXPIRES_AT__</code></strong>
+            </div>
+            <div class="side-row">
+              <span>Scopes</span>
+              <strong><code>__CURRENT_SCOPE_COUNT__</code> autorizacoes</strong>
+            </div>
+            <div class="side-row">
+              <span>Resumo dos scopes</span>
+              <strong><code>__CURRENT_SCOPE_SUMMARY__</code></strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel side-card">
+          <h2>Configuracao</h2>
+          <p class="text-body-sm"><strong>__CONFIG_STATUS__</strong></p>
+          <ul class="config-list text-body-sm">
+            __CONFIG_ERRORS__
+          </ul>
+        </article>
+
+        <article class="panel side-card">
+          <h2>Referencia tecnica</h2>
+          <div class="side-list">
+            <div class="side-row">
+              <span>Rota protegida</span>
+              <strong><code>__DASHBOARD_PATH__</code></strong>
+            </div>
+            <div class="side-row">
+              <span>Arquivo de historico</span>
+              <strong><code>__AUTHORIZATIONS_FILE__</code></strong>
+            </div>
+            <div class="side-row">
+              <span>Scopes completos</span>
+              <strong><code>__CURRENT_SCOPE__</code></strong>
+            </div>
+          </div>
+
+          <details class="side-details">
+            <summary>Ver previews do token atual</summary>
+            <div class="side-details-content">
+              <div class="side-list">
+                <div class="side-row">
+                  <span>Access token</span>
+                  <strong><code>__CURRENT_ACCESS_TOKEN__</code></strong>
+                </div>
+                <div class="side-row">
+                  <span>Refresh token</span>
+                  <strong><code>__CURRENT_REFRESH_TOKEN__</code></strong>
+                </div>
+              </div>
+            </div>
+          </details>
+        </article>
+      </aside>
+    </section>
+
+    <p class="footer-note text-body-sm">Para resposta estruturada via API, use <code>?format=json</code> na URL.</p>
+  </main>
+
+  <script>
+    (function () {
+      var cards = Array.prototype.slice.call(document.querySelectorAll("[data-record-card='true']"));
+      var searchInput = document.getElementById("searchInput");
+      var clearSearch = document.getElementById("clearSearch");
+      var filterButtons = Array.prototype.slice.call(document.querySelectorAll("[data-filter]"));
+      var visibleCount = document.getElementById("visibleCount");
+      var visibleLabel = document.getElementById("visibleLabel");
+      var filterFeedback = document.getElementById("filterFeedback");
+      var clearFilters = document.getElementById("clearFilters");
+      var emptyState = document.getElementById("emptyState");
+      var emptyStateText = document.getElementById("emptyStateText");
+      var resetEmptyState = document.getElementById("resetEmptyState");
+      var copyCurrentLink = document.getElementById("copyCurrentLink");
+      var copyCurrentLinkFeedback = document.getElementById("copyCurrentLinkFeedback");
+      var activeFilter = "all";
+
+      function normalize(value) {
+        return String(value || "").toLowerCase().trim();
+      }
+
+      function getFilterLabel(value) {
+        if (value === "active") {
+          return "Ativas";
+        }
+
+        if (value === "expired") {
+          return "Expiradas";
+        }
+
+        if (value === "timeless") {
+          return "Sem expiracao";
+        }
+
+        if (value === "current") {
+          return "Token atual";
+        }
+
+        return "Todas";
+      }
+
+      function matchesFilter(card) {
+        var status = card.dataset.status || "";
+        var isCurrent = card.dataset.current === "true";
+
+        if (activeFilter === "current") {
+          return isCurrent;
+        }
+
+        if (activeFilter === "active") {
+          return status === "Ativo";
+        }
+
+        if (activeFilter === "expired") {
+          return status === "Expirado";
+        }
+
+        if (activeFilter === "timeless") {
+          return status === "Sem expiracao";
+        }
+
+        return true;
+      }
+
+      function matchesSearch(card, term) {
+        if (!term) {
+          return true;
+        }
+
+        return normalize(card.dataset.search).indexOf(term) !== -1;
+      }
+
+      function syncFilterButtons() {
+        filterButtons.forEach(function (button) {
+          var isActive = button.dataset.filter === activeFilter;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+      }
+
+      function setFeedback(visible, term) {
+        if (visibleCount) {
+          visibleCount.textContent = String(visible);
+        }
+
+        if (visibleLabel) {
+          visibleLabel.textContent = visible === 1 ? "integracao visivel" : "integracoes visiveis";
+        }
+
+        if (emptyState) {
+          emptyState.hidden = visible > 0;
+        }
+
+        if (clearSearch) {
+          clearSearch.hidden = !term;
+        }
+
+        if (clearFilters) {
+          clearFilters.hidden = !term && activeFilter === "all";
+        }
+
+        if (filterFeedback) {
+          if (!cards.length) {
+            filterFeedback.textContent = "Ainda nao ha autorizacoes registradas.";
+          } else if (!term && activeFilter === "all") {
+            filterFeedback.textContent = "Mostrando todo o historico.";
+          } else {
+            var feedback = "Mostrando " + visible + " de " + cards.length + " registros";
+
+            if (activeFilter !== "all") {
+              feedback += " em " + getFilterLabel(activeFilter).toLowerCase();
+            }
+
+            if (term) {
+              feedback += ' para "' + term + '"';
+            }
+
+            filterFeedback.textContent = feedback + ".";
+          }
+        }
+
+        if (emptyStateText) {
+          if (!cards.length) {
+            emptyStateText.textContent = "Inicie uma nova autorizacao para montar o historico.";
+          } else if (term || activeFilter !== "all") {
+            var reasons = [];
+
+            if (term) {
+              reasons.push('a busca por "' + term + '"');
+            }
+
+            if (activeFilter !== "all") {
+              reasons.push("o filtro " + getFilterLabel(activeFilter).toLowerCase());
+            }
+
+            emptyStateText.textContent = "Nao ha resultados para " + reasons.join(" e ") + ".";
+          } else {
+            emptyStateText.textContent = "Altere os filtros para voltar a exibir o historico.";
+          }
+        }
+      }
+
+      function applyFilters() {
+        var term = normalize(searchInput && searchInput.value);
+        var visible = 0;
+
+        cards.forEach(function (card) {
+          var show = matchesFilter(card) && matchesSearch(card, term);
+          card.hidden = !show;
+          if (show) {
+            visible += 1;
+          }
+        });
+
+        setFeedback(visible, term);
+      }
+
+      function resetControls() {
+        activeFilter = "all";
+
+        if (searchInput) {
+          searchInput.value = "";
+          searchInput.focus();
+        }
+
+        syncFilterButtons();
+        applyFilters();
+      }
+
+      filterButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          activeFilter = button.dataset.filter || "all";
+          syncFilterButtons();
+          applyFilters();
+        });
+      });
+
+      if (searchInput) {
+        searchInput.addEventListener("input", applyFilters);
+      }
+
+      if (clearSearch) {
+        clearSearch.addEventListener("click", function () {
+          if (searchInput) {
+            searchInput.value = "";
+            searchInput.focus();
+          }
+
+          applyFilters();
+        });
+      }
+
+      if (clearFilters) {
+        clearFilters.addEventListener("click", resetControls);
+      }
+
+      if (resetEmptyState) {
+        resetEmptyState.addEventListener("click", resetControls);
+      }
+
+      if (copyCurrentLink) {
+        copyCurrentLink.addEventListener("click", function () {
+          var originalLabel = copyCurrentLink.textContent;
+          var currentUrl = window.location.href;
+
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(currentUrl).then(function () {
+              copyCurrentLink.textContent = "URL copiada";
+              if (copyCurrentLinkFeedback) {
+                copyCurrentLinkFeedback.textContent = "URL atual copiada com sucesso.";
+              }
+              window.setTimeout(function () {
+                copyCurrentLink.textContent = originalLabel;
+                if (copyCurrentLinkFeedback) {
+                  copyCurrentLinkFeedback.textContent = "O link copiado preserva o acesso desta sessao quando voce entrou com ?token=.";
+                }
+              }, 1400);
+            }).catch(function () {
+              window.prompt("Copie a URL atual do painel:", currentUrl);
+            });
+            return;
+          }
+
+          window.prompt("Copie a URL atual do painel:", currentUrl);
+        });
+      }
+
+      syncFilterButtons();
+      applyFilters();
+    })();
+  </script>
+</body>
+</html>
