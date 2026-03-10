@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="6;url=__REDIRECT_TARGET__">
+  <title>__PAGE_TITLE__</title>
+  <link rel="stylesheet" href="/assets/zoi/theme.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-6);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(181, 255, 129, 0.28), transparent 36%),
+        linear-gradient(160deg, var(--neutral-50) 0%, #ffffff 48%, #f7fff2 100%);
+    }
+
+    .redirect-shell {
+      width: min(42rem, 100%);
+    }
+
+    .redirect-card {
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      background: rgba(255, 255, 255, 0.92);
+      padding: var(--space-8);
+      box-shadow: 0 22px 50px rgba(20, 20, 20, 0.12);
+      backdrop-filter: blur(8px);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      margin-bottom: var(--space-5);
+      padding: 0.3rem 0.9rem;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      background-color: rgba(181, 255, 129, 0.22);
+      color: var(--neutral-900);
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .intro {
+      max-width: 38rem;
+      color: var(--text-secondary);
+      margin-bottom: var(--space-6);
+    }
+
+    .progress-wrap {
+      margin-bottom: var(--space-6);
+    }
+
+    .progress-track {
+      height: 0.5rem;
+      border-radius: var(--radius-full);
+      background: rgba(20, 20, 20, 0.08);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 100%;
+      transform-origin: left center;
+      transform: scaleX(0);
+      background: linear-gradient(90deg, var(--green-400), var(--green-500));
+      transition: transform 120ms linear;
+    }
+
+    .countdown {
+      margin-top: var(--space-3);
+      color: var(--text-tertiary);
+    }
+
+    .actions {
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-6);
+    }
+
+    .issues-box {
+      margin-bottom: var(--space-6);
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      background: rgba(229, 57, 53, 0.06);
+      border: 1px solid rgba(229, 57, 53, 0.25);
+    }
+
+    .issues-title {
+      margin: 0 0 var(--space-2);
+      color: #8b1f1f;
+      font-weight: 600;
+    }
+
+    .issues {
+      margin: 0;
+      padding-left: var(--space-5);
+      color: #8b1f1f;
+    }
+
+    .issues-box.is-hidden {
+      display: none;
+    }
+
+    .target {
+      margin: 0;
+      color: var(--text-tertiary);
+    }
+
+    .target code {
+      background: rgba(20, 20, 20, 0.06);
+      border-radius: var(--radius-sm);
+      padding: 0.15rem 0.45rem;
+      color: var(--text-primary);
+    }
+
+    @media (max-width: 720px) {
+      .redirect-card {
+        padding: var(--space-6);
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .actions .btn {
+        width: 100%;
+      }
+
+      .text-display-md {
+        font-size: 1.65rem;
+      }
+    }
+  </style>
+</head>
+<body data-redirect-target="__REDIRECT_TARGET__" data-redirect-delay-ms="__REDIRECT_DELAY_MS__">
+  <main class="redirect-shell">
+    <section class="redirect-card">
+      <p class="badge">ZOI Integrador</p>
+      <h1 class="text-display-md">__MAIN_TITLE__</h1>
+      <p class="text-body-md intro">__MAIN_SUBTITLE__</p>
+
+      <div class="progress-wrap" role="status" aria-live="polite">
+        <div class="progress-track">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <p class="countdown text-body-sm" id="countdownText">Redirecionando...</p>
+      </div>
+
+      <div class="actions">
+        <a class="btn btn-primary" id="redirectNow" href="__REDIRECT_TARGET__">__CTA_LABEL__</a>
+        <a class="btn btn-outline" href="auth/status">Ver status</a>
+        <a class="btn btn-secondary" href="?format=json">Resposta JSON</a>
+      </div>
+
+      <section class="issues-box __ERROR_SECTION_CLASS__" aria-live="polite">
+        <p class="issues-title text-body-sm">Pendencias de configuracao detectadas:</p>
+        <ul class="issues text-body-sm">
+          __CONFIG_ERRORS__
+        </ul>
+      </section>
+
+      <p class="target text-body-sm">Destino: <code>__REDIRECT_TARGET__</code></p>
+      <noscript>
+        <p class="text-body-sm" style="margin-top: var(--space-4);">
+          JavaScript esta desabilitado. Use o botao para seguir.
+        </p>
+      </noscript>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var target = document.body.dataset.redirectTarget || "auth/start";
+      var delayMs = Number(document.body.dataset.redirectDelayMs || "1800");
+      var startedAt = Date.now();
+      var progressBar = document.getElementById("progressBar");
+      var countdownText = document.getElementById("countdownText");
+      var redirectNow = document.getElementById("redirectNow");
+
+      function updateUI() {
+        var elapsed = Date.now() - startedAt;
+        var progress = Math.min(1, elapsed / delayMs);
+        var remaining = Math.max(0, Math.ceil((delayMs - elapsed) / 1000));
+
+        if (progressBar) {
+          progressBar.style.transform = "scaleX(" + progress + ")";
+        }
+
+        if (countdownText) {
+          countdownText.textContent = remaining > 0
+            ? "Redirecionando em " + remaining + "s..."
+            : "Redirecionando...";
+        }
+      }
+
+      function redirectNowFn() {
+        window.location.assign(target);
+      }
+
+      if (redirectNow) {
+        redirectNow.addEventListener("click", function (event) {
+          event.preventDefault();
+          redirectNowFn();
+        });
+      }
+
+      updateUI();
+      var timer = setInterval(function () {
+        updateUI();
+
+        if (Date.now() - startedAt >= delayMs) {
+          clearInterval(timer);
+          redirectNowFn();
+        }
+      }, 120);
+    })();
+  </script>
+</body>
+</html>

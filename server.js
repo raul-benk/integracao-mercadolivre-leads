@@ -22,12 +22,21 @@ const TOKENS_FILE = path.resolve(
 const NOTIFICATIONS_FILE = path.resolve(
   process.env.MELI_NOTIFICATIONS_FILE || path.join(__dirname, "notifications.log")
 );
+const ZOI_STYLES_DIR = path.resolve(
+  __dirname,
+  "node_modules",
+  "@zoitechnologies",
+  "ds",
+  "styles"
+);
+const REDIRECT_PAGE_FILE = path.resolve(__dirname, "public", "redirect.html");
 const AUTH_URL = "https://auth.mercadolivre.com.br/authorization";
 const TOKEN_URL = "https://api.mercadolibre.com/oauth/token";
 const STATE_TTL_MS = 10 * 60 * 1000;
 const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000;
 
 const pendingStates = new Map();
+app.use("/assets/zoi", express.static(ZOI_STYLES_DIR));
 
 function getConfigErrors() {
   const errors = [];
@@ -200,23 +209,30 @@ function hasUsableTokens(tokens) {
   return Boolean(tokens && tokens.access_token);
 }
 
-app.get("/", (req, res) => {
-  const configErrors = getConfigErrors();
+function requestWantsJson(req) {
+  const format = typeof req.query.format === "string" ? req.query.format.toLowerCase() : "";
+  if (format === "json") {
+    return true;
+  }
+
+  return req.accepts(["html", "json"]) === "json";
+}
+
+function buildRootPayload(configErrors = getConfigErrors()) {
   if (configErrors.length > 0) {
-    res.json({
-      message: "Configure as variáveis de ambiente para iniciar o OAuth",
+    return {
+      message: "Configure as variaveis de ambiente para iniciar o OAuth",
       configured: false,
       config_errors: configErrors,
       status: "/auth/status",
-    });
-    return;
+    };
   }
 
   cleanupStates();
   const state = generateState();
   const authorizationUrl = buildAuthorizationUrl(state);
 
-  res.json({
+  return {
     message: "OAuth Mercado Livre pronto",
     authorization_url: authorizationUrl,
     start_oauth: "/auth/start",
@@ -225,7 +241,73 @@ app.get("/", (req, res) => {
     notifications_url: NOTIFICATIONS_URL || null,
     refresh: "POST /auth/refresh",
     status: "/auth/status",
+  };
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function applyTemplate(template, replacements) {
+  let filled = template;
+
+  for (const [token, value] of Object.entries(replacements)) {
+    filled = filled.split(token).join(String(value));
+  }
+
+  return filled;
+}
+
+function renderRedirectPage(configErrors) {
+  const hasConfigErrors = configErrors.length > 0;
+  const redirectTarget = hasConfigErrors ? "auth/status" : "auth/start";
+  const redirectDelayMs = hasConfigErrors ? 2600 : 1800;
+  const pageTitle = hasConfigErrors
+    ? "Configuracao pendente | Integrador Mercado Livre"
+    : "Redirecionando | Integrador Mercado Livre";
+  const mainTitle = hasConfigErrors ? "Configuracao pendente" : "Conectando Mercado Livre";
+  const subtitle = hasConfigErrors
+    ? "Detectamos pendencias no ambiente. Voce sera redirecionado para o diagnostico."
+    : "Estamos preparando o fluxo OAuth. O redirecionamento iniciara em instantes.";
+  const ctaLabel = hasConfigErrors ? "Abrir diagnostico" : "Iniciar OAuth agora";
+  const errorsList = hasConfigErrors
+    ? configErrors.map((message) => `<li>${escapeHtml(message)}</li>`).join("")
+    : "<li>Nenhuma pendencia detectada.</li>";
+  const errorSectionClass = hasConfigErrors ? "" : "is-hidden";
+  const template = fs.readFileSync(REDIRECT_PAGE_FILE, "utf8");
+
+  return applyTemplate(template, {
+    "__PAGE_TITLE__": escapeHtml(pageTitle),
+    "__MAIN_TITLE__": escapeHtml(mainTitle),
+    "__MAIN_SUBTITLE__": escapeHtml(subtitle),
+    "__CTA_LABEL__": escapeHtml(ctaLabel),
+    "__REDIRECT_TARGET__": escapeHtml(redirectTarget),
+    "__REDIRECT_DELAY_MS__": String(redirectDelayMs),
+    "__ERROR_SECTION_CLASS__": errorSectionClass,
+    "__CONFIG_ERRORS__": errorsList,
   });
+}
+
+app.get("/", (req, res) => {
+  const configErrors = getConfigErrors();
+  if (requestWantsJson(req)) {
+    res.json(buildRootPayload(configErrors));
+    return;
+  }
+
+  try {
+    const html = renderRedirectPage(configErrors);
+    res.type("html").send(html);
+  } catch (errorObj) {
+    const redirectTarget = configErrors.length > 0 ? "auth/status" : "auth/start";
+    console.error(`Falha ao renderizar pagina de redirect: ${errorObj.message}`);
+    res.redirect(redirectTarget);
+  }
 });
 
 app.get("/auth/start", (req, res) => {

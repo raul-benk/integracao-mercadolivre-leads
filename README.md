@@ -20,7 +20,8 @@ Repositorio de destino no GitHub:
 
 ## Endpoints da API local
 
-- `GET /` resumo e URL de autorizacao
+- `GET /` pagina HTML de redirect para OAuth (com estilo ZOI)
+- `GET /?format=json` resumo e URL de autorizacao (modo API)
 - `GET /auth/start` inicia OAuth
 - `GET /callback` recebe `code` e salva tokens
 - `POST /auth/refresh` renova token com `refresh_token`
@@ -169,32 +170,3 @@ set +a
 pm2 restart meli-oauth --update-env
 pm2 save
 ```
-
-## Publicar no GitHub
-
-Caso ainda nao tenha inicializado o repositorio nesta pasta:
-
-```bash
-git init
-git add .
-git commit -m "feat: estrutura oauth + notificacoes mercado livre"
-git branch -M main
-git remote add origin https://github.com/raul-benk/integracao-mercadolivre-leads.git
-git push -u origin main
-```
-
-Se o remoto ja existir:
-
-```bash
-git remote -v
-git add .
-git commit -m "docs: guia completo de deploy e operacao com pm2"
-git push
-```
-
-## Seguranca
-
-- Nunca commitar `.env`.
-- Nunca expor `MELI_CLIENT_SECRET`.
-- A URL de notificacoes deve permanecer em minusculas.
-- Restrinja permissao do `.env` (`chmod 600` em producao).
