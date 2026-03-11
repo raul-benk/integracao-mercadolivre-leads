@@ -15,8 +15,13 @@ Referencias atuais de producao para este projeto.
 - Cliente (iniciar autorizacao): `https://integrador.zoitech.com.br/meli/auth/start`
 - Health: `https://integrador.zoitech.com.br/meli/health`
 - Status OAuth: `https://integrador.zoitech.com.br/meli/auth/status`
+- Webhook principal (ML): `https://integrador.zoitech.com.br/meli/mercadolivre/webhook`
+- Webhook legacy (alias): `https://integrador.zoitech.com.br/meli/notifications`
 - Admin dashboard (HTML): `https://integrador.zoitech.com.br/meli/admin/integrations/?token=<TOKEN>`
 - Admin dashboard (JSON): `https://integrador.zoitech.com.br/meli/admin/integrations/?token=<TOKEN>&format=json`
+- Enriquecer perfil atual (POST): `https://integrador.zoitech.com.br/meli/admin/integrations/enrich?token=<TOKEN>`
+- Webhooks dashboard (HTML): `https://integrador.zoitech.com.br/meli/integracoes/mercadolivre/webhooks/?token=<TOKEN>`
+- Webhooks dashboard (JSON): `https://integrador.zoitech.com.br/meli/integracoes/mercadolivre/webhooks/?token=<TOKEN>&format=json`
 
 Para imprimir o link administrativo com o token atual salvo no servidor:
 
@@ -45,6 +50,30 @@ pm2 logs meli-oauth --lines 80 --nostream
 curl -i http://127.0.0.1:7254/health
 curl -i https://integrador.zoitech.com.br/meli/health
 curl -i https://integrador.zoitech.com.br/meli/auth/status
+curl -i https://integrador.zoitech.com.br/meli/mercadolivre/webhook
+```
+
+Forcar enriquecimento da conta atual:
+
+```bash
+TOKEN="$(cat /root/.meli_admin_token)"
+curl -i -X POST "https://integrador.zoitech.com.br/meli/admin/integrations/enrich?token=${TOKEN}"
+```
+
+Atualizacao diaria (cron sugerido):
+
+```bash
+crontab -e
+# 03:10 todos os dias
+10 3 * * * TOKEN="$(cat /root/.meli_admin_token)" && curl -s -X POST "https://integrador.zoitech.com.br/meli/admin/integrations/enrich?token=${TOKEN}" >/dev/null 2>&1
+```
+
+Teste rapido de webhook (simulado):
+
+```bash
+curl -i -X POST https://integrador.zoitech.com.br/meli/mercadolivre/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"topic":"questions","resource":"/questions/123456789","user_id":123456}'
 ```
 
 ## Rotacionar token admin do dashboard

@@ -16,7 +16,9 @@ Repositorio de destino no GitHub:
 
 - Redirect URI:
   `https://integrador.zoitech.com.br/meli/callback`
-- URL de notificacoes (somente minusculas):
+- URL principal de webhook (Mercado Livre):
+  `https://integrador.zoitech.com.br/meli/mercadolivre/webhook`
+- URL legacy de notificacoes (alias):
   `https://integrador.zoitech.com.br/meli/notifications`
 
 ## Endpoints da API local
@@ -28,8 +30,12 @@ Repositorio de destino no GitHub:
 - `POST /auth/refresh` renova token com `refresh_token`
 - `GET /auth/status` status de configuracao/token
 - `GET /admin/integrations` dashboard HTML/JSON das autorizacoes
-- `GET /notifications` status do webhook
-- `POST /notifications` recebe notificacoes
+- `POST /admin/integrations/enrich` forca enriquecimento dos dados da conta atual via `/users/me`
+- `GET /integracoes/mercadolivre/webhooks` dashboard HTML/JSON dos webhooks
+- `GET /mercadolivre/webhook` status do endpoint principal de webhook
+- `POST /mercadolivre/webhook` recebe webhook e processa recurso em background
+- `GET /notifications` status do endpoint legacy (alias)
+- `POST /notifications` alias legado para recepcao de webhook
 - `GET /health` healthcheck
 
 ## Variaveis de ambiente
@@ -48,9 +54,15 @@ Recomendadas:
 - `PORT=7254`
 - `MELI_TOKENS_FILE` caminho persistente do `tokens.json`
 - `MELI_NOTIFICATIONS_PATH=/notifications`
+- `MELI_WEBHOOK_PATH=/mercadolivre/webhook`
 - `MELI_NOTIFICATIONS_URL` URL publica em minusculas
 - `MELI_NOTIFICATIONS_FILE` arquivo de log das notificacoes
 - `MELI_AUTHORIZATIONS_FILE` historico JSON das autorizacoes realizadas
+- `MELI_INTEGRATIONS_FILE` perfis enriquecidos da conta (`/users/me`)
+- `MELI_API_LOGS_FILE` historico de chamadas para API do Mercado Livre
+- `MELI_WEBHOOKS_FILE` arquivo JSON dos webhooks recebidos
+- `MELI_WEBHOOK_EVENTS_FILE` arquivo JSON dos eventos completos consultados na API
+- `MELI_WEBHOOK_PROCESS_LOG_FILE` log NDJSON com `webhook_recebido`, `webhook_processado` e `erro_consulta_api`
 - `MELI_ADMIN_DASHBOARD_TOKEN` token usado no link administrativo
 
 ## Execucao local
@@ -69,8 +81,10 @@ Testes rapidos:
 ```bash
 curl http://localhost:7254/health
 curl http://localhost:7254/auth/status
-curl http://localhost:7254/notifications
+curl http://localhost:7254/mercadolivre/webhook
 curl "http://localhost:7254/admin/integrations?token=SEU_TOKEN&format=json"
+curl -X POST "http://localhost:7254/admin/integrations/enrich?token=SEU_TOKEN"
+curl "http://localhost:7254/integracoes/mercadolivre/webhooks?token=SEU_TOKEN&format=json"
 ```
 
 Fluxo OAuth:
@@ -109,8 +123,61 @@ Obs: o servidor usa o build em `public/mercado-livre-oauth-admin/dist`. Se o bui
 Importante:
 
 - O dashboard lista todas as autorizacoes registradas no callback.
+- O dashboard tambem mostra dados enriquecidos via `/users/me` (loja, proprietario, email, cidade/UF, CNPJ, reputacao e experiencia).
 - O arquivo `tokens.json` continua representando apenas o token ativo mais recente.
 - O token do link administrativo deve ser forte e mantido fora do Git.
+
+## Webhooks Mercado Livre
+
+Configuracao recomendada na app do Mercado Livre:
+
+- Callback URL: `https://integrador.zoitech.com.br/meli/mercadolivre/webhook`
+- Topics sugeridos: `questions`, `orders`, `messages`, `items`, `shipments`, `payments`
+
+Fluxo implementado:
+
+1. `POST /mercadolivre/webhook` recebe o payload.
+2. O payload bruto e salvo no arquivo `MELI_WEBHOOKS_FILE`.
+3. A API responde `HTTP 200` imediatamente.
+4. O processamento ocorre em background:
+   - valida payload;
+   - consulta `https://api.mercadolibre.com{resource}` com `Bearer`;
+   - tenta refresh de token automaticamente em 401/expiracao;
+   - salva evento completo em `MELI_WEBHOOK_EVENTS_FILE`;
+   - registra logs em `MELI_WEBHOOK_PROCESS_LOG_FILE`.
+
+Dashboard de webhooks:
+
+- Rota local: `http://localhost:7254/integracoes/mercadolivre/webhooks?token=SEU_TOKEN`
+- Rota publica: `https://integrador.zoitech.com.br/meli/integracoes/mercadolivre/webhooks?token=SEU_TOKEN`
+- Versao JSON: adicione `&format=json`
+
+## Enriquecimento de conta (/users/me)
+
+Quando o OAuth e concluido (ou quando `POST /admin/integrations/enrich` e executado), o backend consulta:
+
+- `GET https://api.mercadolibre.com/users/me`
+
+Campos enriquecidos no payload do dashboard/admin:
+
+- `store_nickname`
+- `owner_name`, `owner_first_name`, `owner_last_name`
+- `email`
+- `business_name`, `brand_name`
+- `account_type`, `cnpj`
+- `city`, `state`
+- `reputation_level`, `seller_experience`
+- `account_created_at`
+- `last_enriched_at`
+
+Persistencia:
+
+- Perfis: `MELI_INTEGRATIONS_FILE`
+- Logs de API: `MELI_API_LOGS_FILE`
+
+Atualizacao periodica recomendada:
+
+- Cron diario chamando `POST /admin/integrations/enrich?token=SEU_TOKEN`
 
 ## Estrutura de deploy na VPS
 
@@ -129,6 +196,9 @@ Estrutura recomendada:
 - `/var/www/integrador.zoitech.com.br/meli-oauth/shared/config/.env`
 - `/var/www/integrador.zoitech.com.br/meli-oauth/shared/tokens/tokens.json`
 - `/var/www/integrador.zoitech.com.br/meli-oauth/shared/tokens/authorizations.json`
+- `/var/www/integrador.zoitech.com.br/meli-oauth/shared/integrations/integrations.json`
+- `/var/www/integrador.zoitech.com.br/meli-oauth/shared/webhooks/webhooks.json`
+- `/var/www/integrador.zoitech.com.br/meli-oauth/shared/webhooks/webhook-events.json`
 - `/var/www/integrador.zoitech.com.br/meli-oauth/shared/logs/`
 
 Bootstrap da estrutura:
@@ -152,7 +222,7 @@ location /meli/ {
 }
 ```
 
-Obs: com essa regra, rota publica `/meli/notifications` vira `/notifications` no Node.
+Obs: com essa regra, rota publica `/meli/mercadolivre/webhook` vira `/mercadolivre/webhook` no Node.
 
 ## PM2 (producao)
 

@@ -35,6 +35,21 @@ interface Integration {
   accessToken: string;
   refreshToken: string;
   isCurrentToken: boolean;
+  storeNickname: string;
+  ownerName: string;
+  ownerFirstName: string;
+  ownerLastName: string;
+  email: string;
+  businessName: string;
+  brandName: string;
+  accountType: string;
+  cnpj: string;
+  city: string;
+  state: string;
+  reputationLevel: string;
+  sellerExperience: string;
+  accountCreatedAt: string | null;
+  profileSyncedAt: string | null;
 }
 
 interface DashboardMeta {
@@ -42,6 +57,9 @@ interface DashboardMeta {
   configErrors: string[];
   dashboardPath: string;
   publicDashboardPath: string;
+  webhookDashboardPath: string;
+  publicWebhookDashboardPath: string;
+  webhookPaths: string[];
   authorizationsFile: string;
   latestUserId: string;
   latestAuthorizedAt: string | null;
@@ -52,6 +70,12 @@ interface DashboardMeta {
   currentScopeSummary: string;
   currentAccessToken: string;
   currentRefreshToken: string;
+  integrationsFile: string;
+  meliApiLogsFile: string;
+  totalProfiles: number;
+  profilesWithCnpj: number;
+  latestProfileSyncAt: string | null;
+  latestMeliApiCallAt: string | null;
 }
 
 interface DashboardMetrics {
@@ -84,6 +108,9 @@ const DEFAULT_META: DashboardMeta = {
   configErrors: [],
   dashboardPath: ADMIN_DASHBOARD_PATH,
   publicDashboardPath: '/meli/admin/integrations',
+  webhookDashboardPath: '/integracoes/mercadolivre/webhooks',
+  publicWebhookDashboardPath: '/meli/integracoes/mercadolivre/webhooks',
+  webhookPaths: ['/notifications', '/mercadolivre/webhook'],
   authorizationsFile: 'Nao informado',
   latestUserId: 'Nao identificado',
   latestAuthorizedAt: null,
@@ -94,6 +121,12 @@ const DEFAULT_META: DashboardMeta = {
   currentScopeSummary: 'Nenhum scope informado',
   currentAccessToken: 'Nao disponivel',
   currentRefreshToken: 'Nao disponivel',
+  integrationsFile: 'Nao informado',
+  meliApiLogsFile: 'Nao informado',
+  totalProfiles: 0,
+  profilesWithCnpj: 0,
+  latestProfileSyncAt: null,
+  latestMeliApiCallAt: null,
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -177,6 +210,24 @@ const pickStringArray = (
   return [];
 };
 
+const pickStringWithNested = (
+  record: Record<string, unknown>,
+  nestedRecord: Record<string, unknown> | null,
+  keys: string[],
+  fallback = '',
+): string => {
+  const directValue = pickString(record, keys, '');
+  if (directValue) {
+    return directValue;
+  }
+
+  if (nestedRecord) {
+    return pickString(nestedRecord, keys, fallback);
+  }
+
+  return fallback;
+};
+
 const normalizeDate = (
   value: unknown,
   fallback: string | null = null,
@@ -200,6 +251,17 @@ const formatDateTime = (value: string | null): string => {
     return value;
   }
   return parsed.toLocaleString('pt-BR');
+};
+
+const formatYear = (value: string | null): string => {
+  if (!value) {
+    return 'Nao informado';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Nao informado';
+  }
+  return String(parsed.getUTCFullYear());
 };
 
 const summarizeScopes = (scopes: string[], maxItems = 4): string => {
@@ -311,6 +373,19 @@ const buildApiCandidates = (pathPrefix: string): string[] => {
   return Array.from(new Set(candidates));
 };
 
+const buildProtectedApiUrl = (pathPrefix: string, routePath: string): string => {
+  const url = new URL(
+    `${window.location.origin}${buildPrefixedPath(pathPrefix, routePath)}`,
+  );
+
+  const token = new URLSearchParams(window.location.search).get('token');
+  if (token) {
+    url.searchParams.set('token', token);
+  }
+
+  return url.toString();
+};
+
 const extractArrayFromPayload = (payload: unknown): unknown[] => {
   if (Array.isArray(payload)) {
     return payload;
@@ -379,16 +454,115 @@ const mapIntegration = (
     'Nao identificado',
   );
 
-  const userName = pickString(
+  const profileRecord = isRecord(rawItem.profile) ? rawItem.profile : null;
+  const storeNickname = pickStringWithNested(
     rawItem,
-    ['userName', 'user_name', 'nickname', 'sellerNickname', 'name'],
-    `Conta ${userId}`,
+    profileRecord,
+    ['store_nickname', 'storeNickname', 'nickname', 'sellerNickname'],
+    'Nao informado',
+  );
+  const ownerFirstName = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['owner_first_name', 'ownerFirstName', 'first_name', 'firstName'],
+    '',
+  );
+  const ownerLastName = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['owner_last_name', 'ownerLastName', 'last_name', 'lastName'],
+    '',
+  );
+  const ownerName = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['owner_name', 'ownerName'],
+    `${ownerFirstName} ${ownerLastName}`.trim() || 'Nao informado',
+  );
+  const email = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['email'],
+    'Nao informado',
+  );
+  const businessName = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['business_name', 'businessName'],
+    'Nao informado',
+  );
+  const brandName = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['brand_name', 'brandName'],
+    'Nao informado',
+  );
+  const accountType = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['account_type_label', 'account_type', 'accountType'],
+    'Nao informado',
+  );
+  const cnpj = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['cnpj_formatted', 'cnpj'],
+    'Nao informado',
+  );
+  const city = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['city'],
+    'Nao informado',
+  );
+  const state = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['state'],
+    'Nao informado',
+  );
+  const reputationLevel = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['reputation_level', 'reputationLevel'],
+    'Nao informado',
+  );
+  const sellerExperience = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['seller_experience', 'sellerExperience'],
+    'Nao informado',
+  );
+  const accountCreatedAt = normalizeDate(
+    (rawItem.account_created_at ??
+      rawItem.accountCreatedAt ??
+      profileRecord?.account_created_at ??
+      profileRecord?.accountCreatedAt) as unknown,
+    null,
+  );
+  const profileSyncedAt = normalizeDate(
+    (rawItem.profile_synced_at ??
+      rawItem.last_enriched_at ??
+      profileRecord?.last_enriched_at ??
+      profileRecord?.lastEnrichedAt) as unknown,
+    null,
+  );
+
+  const userName = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['userName', 'user_name', 'name'],
+    ownerName !== 'Nao informado' ? ownerName : `Conta ${userId}`,
   );
 
   const integrationName = pickString(
     rawItem,
     ['integrationName', 'integration_name', 'appName', 'applicationName', 'clientName'],
-    `Conta ${userId}`,
+    storeNickname !== 'Nao informado'
+      ? storeNickname
+      : brandName !== 'Nao informado'
+        ? brandName
+        : `Conta ${userId}`,
   );
 
   const avatarUrl = pickString(
@@ -440,6 +614,21 @@ const mapIntegration = (
     accessToken,
     refreshToken,
     isCurrentToken: isCurrentFromPayload || isCurrentByUserId,
+    storeNickname,
+    ownerName,
+    ownerFirstName: ownerFirstName || 'Nao informado',
+    ownerLastName: ownerLastName || 'Nao informado',
+    email,
+    businessName,
+    brandName,
+    accountType,
+    cnpj,
+    city,
+    state,
+    reputationLevel,
+    sellerExperience,
+    accountCreatedAt,
+    profileSyncedAt,
   };
 };
 
@@ -530,6 +719,9 @@ const parseDashboardPayload = (payload: unknown): ParsedDashboardPayload => {
   const configured = payloadRecord
     ? pickBoolean(payloadRecord, ['configured'], configErrors.length === 0)
     : true;
+  const webhookPaths = payloadRecord
+    ? pickStringArray(payloadRecord, ['webhook_paths'])
+    : [];
 
   const meta: DashboardMeta = {
     configured,
@@ -544,6 +736,21 @@ const parseDashboardPayload = (payload: unknown): ParsedDashboardPayload => {
           DEFAULT_META.publicDashboardPath,
         )
       : DEFAULT_META.publicDashboardPath,
+    webhookDashboardPath: payloadRecord
+      ? pickString(
+          payloadRecord,
+          ['webhook_dashboard_path'],
+          DEFAULT_META.webhookDashboardPath,
+        )
+      : DEFAULT_META.webhookDashboardPath,
+    publicWebhookDashboardPath: payloadRecord
+      ? pickString(
+          payloadRecord,
+          ['public_webhook_dashboard_path'],
+          DEFAULT_META.publicWebhookDashboardPath,
+        )
+      : DEFAULT_META.publicWebhookDashboardPath,
+    webhookPaths: webhookPaths.length > 0 ? webhookPaths : DEFAULT_META.webhookPaths,
     authorizationsFile: payloadRecord
       ? pickString(
           payloadRecord,
@@ -566,6 +773,24 @@ const parseDashboardPayload = (payload: unknown): ParsedDashboardPayload => {
     currentScopeSummary,
     currentAccessToken,
     currentRefreshToken,
+    integrationsFile: payloadRecord
+      ? pickString(payloadRecord, ['integrations_file'], DEFAULT_META.integrationsFile)
+      : DEFAULT_META.integrationsFile,
+    meliApiLogsFile: payloadRecord
+      ? pickString(payloadRecord, ['meli_api_logs_file'], DEFAULT_META.meliApiLogsFile)
+      : DEFAULT_META.meliApiLogsFile,
+    totalProfiles: payloadRecord
+      ? pickNumber(payloadRecord, ['total_profiles'], DEFAULT_META.totalProfiles)
+      : DEFAULT_META.totalProfiles,
+    profilesWithCnpj: payloadRecord
+      ? pickNumber(payloadRecord, ['profiles_with_cnpj'], DEFAULT_META.profilesWithCnpj)
+      : DEFAULT_META.profilesWithCnpj,
+    latestProfileSyncAt: payloadRecord
+      ? normalizeDate(payloadRecord.latest_profile_sync_at, null)
+      : null,
+    latestMeliApiCallAt: payloadRecord
+      ? normalizeDate(payloadRecord.latest_meli_api_call_at, null)
+      : null,
   };
 
   const metrics = payloadRecord
@@ -679,6 +904,11 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadCount, setReloadCount] = useState(0);
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [enrichFeedback, setEnrichFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const pathPrefix = useMemo(() => parsePathPrefix(), []);
   const authStartHref = useMemo(
@@ -688,6 +918,14 @@ export default function App() {
   const statusHref = useMemo(
     () => buildPrefixedPath(pathPrefix, '/auth/status'),
     [pathPrefix],
+  );
+  const webhookDashboardHref = useMemo(
+    () => buildProtectedApiUrl(pathPrefix, meta.webhookDashboardPath || DEFAULT_META.webhookDashboardPath),
+    [meta.webhookDashboardPath, pathPrefix],
+  );
+  const enrichPath = useMemo(
+    () => `${ADMIN_DASHBOARD_PATH}/enrich`,
+    [],
   );
 
   const handleCopyUrl = async () => {
@@ -708,6 +946,54 @@ export default function App() {
 
   const refreshIntegrations = () => {
     setReloadCount((count) => count + 1);
+  };
+
+  const enrichCurrentAccount = async () => {
+    setIsEnriching(true);
+    setEnrichFeedback(null);
+
+    try {
+      const response = await fetch(
+        buildProtectedApiUrl(pathPrefix, enrichPath),
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+          },
+        },
+      );
+
+      const contentType = response.headers.get('content-type') || '';
+      const payload: unknown = contentType.toLowerCase().includes('application/json')
+        ? await response.json()
+        : null;
+
+      if (!response.ok) {
+        const message = isRecord(payload)
+          ? pickString(payload, ['message', 'error'], `Erro ${response.status} ao atualizar perfil.`)
+          : `Erro ${response.status} ao atualizar perfil.`;
+        throw new Error(message);
+      }
+
+      const message = isRecord(payload)
+        ? pickString(payload, ['message'], 'Dados das contas atualizados com sucesso.')
+        : 'Dados das contas atualizados com sucesso.';
+
+      setEnrichFeedback({
+        type: 'success',
+        message,
+      });
+      refreshIntegrations();
+    } catch (error) {
+      setEnrichFeedback({
+        type: 'error',
+        message: error instanceof Error
+          ? error.message
+          : 'Falha ao atualizar os dados da conta.',
+      });
+    } finally {
+      setIsEnriching(false);
+    }
   };
 
   const toggleCard = (id: string) => {
@@ -802,6 +1088,17 @@ export default function App() {
       const matchesSearch = normalizedSearch === ''
         ? true
         : integration.userName.toLowerCase().includes(normalizedSearch) ||
+          integration.storeNickname.toLowerCase().includes(normalizedSearch) ||
+          integration.ownerName.toLowerCase().includes(normalizedSearch) ||
+          integration.email.toLowerCase().includes(normalizedSearch) ||
+          integration.businessName.toLowerCase().includes(normalizedSearch) ||
+          integration.brandName.toLowerCase().includes(normalizedSearch) ||
+          integration.city.toLowerCase().includes(normalizedSearch) ||
+          integration.state.toLowerCase().includes(normalizedSearch) ||
+          integration.cnpj.toLowerCase().includes(normalizedSearch) ||
+          integration.reputationLevel.toLowerCase().includes(normalizedSearch) ||
+          integration.sellerExperience.toLowerCase().includes(normalizedSearch) ||
+          integration.accountType.toLowerCase().includes(normalizedSearch) ||
           integration.userId.toLowerCase().includes(normalizedSearch) ||
           integration.scopeSummary.toLowerCase().includes(normalizedSearch) ||
           integration.scopes.some((scope) => scope.toLowerCase().includes(normalizedSearch)) ||
@@ -856,7 +1153,7 @@ export default function App() {
                 Integracoes OAuth
               </h1>
               <p className="text-slate-400 max-w-2xl text-sm sm:text-base">
-                Visao direta do estado atual: token ativo, saude do historico e registros de autorizacao.
+                Visao direta do estado atual: token ativo, historico de autorizacoes e dados enriquecidos da conta.
               </p>
             </div>
 
@@ -875,6 +1172,21 @@ export default function App() {
                 <Activity className="w-4 h-4" />
                 Diagnostico
               </a>
+              <a
+                href={webhookDashboardHref}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-sm font-medium rounded-lg border border-sky-500/30 transition-colors"
+              >
+                <Database className="w-4 h-4" />
+                Webhooks
+              </a>
+              <button
+                onClick={enrichCurrentAccount}
+                disabled={isEnriching}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-sm font-medium rounded-lg border border-emerald-500/30 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${isEnriching ? 'animate-spin' : ''}`} />
+                {isEnriching ? 'Atualizando contas...' : 'Atualizar dados das contas'}
+              </button>
               <button
                 onClick={handleCopyUrl}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 text-sm font-medium rounded-lg border border-slate-700/50 transition-colors"
@@ -884,6 +1196,18 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          {enrichFeedback && (
+            <div
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                enrichFeedback.type === 'success'
+                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                  : 'border-rose-500/20 bg-rose-500/10 text-rose-400'
+              }`}
+            >
+              {enrichFeedback.message}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900/50 border border-slate-800">
@@ -897,6 +1221,10 @@ export default function App() {
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900/50 border border-slate-800">
               <span className="text-slate-500">Subpath publico:</span>
               <span className="font-mono text-slate-300">{meta.publicDashboardPath}</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900/50 border border-slate-800">
+              <span className="text-slate-500">Webhooks:</span>
+              <span className="font-mono text-slate-300">{meta.publicWebhookDashboardPath}</span>
             </div>
           </div>
         </header>
@@ -1051,6 +1379,13 @@ export default function App() {
                         exit={{ opacity: 0, scale: 0.96 }}
                         key={integration.id}
                       >
+                        {(() => {
+                          const clientLabel = integration.businessName !== 'Nao informado'
+                            ? integration.businessName
+                            : integration.brandName !== 'Nao informado'
+                              ? integration.brandName
+                              : integration.integrationName;
+                          return (
                         <GlassCard className="overflow-hidden transition-colors hover:border-slate-700">
                           <div className="p-5">
                             <div className="flex items-start justify-between gap-4 mb-4">
@@ -1081,6 +1416,10 @@ export default function App() {
                                 <p className="text-sm font-mono text-slate-300 break-all">{integration.userId}</p>
                               </div>
                               <div>
+                                <p className="text-xs text-slate-500 mb-1">Loja Mercado Livre</p>
+                                <p className="text-sm text-slate-300 break-all">{integration.storeNickname}</p>
+                              </div>
+                              <div>
                                 <p className="text-xs text-slate-500 mb-1">Autorizado em</p>
                                 <p className="text-sm text-slate-300">{formatDateTime(integration.authDate)}</p>
                               </div>
@@ -1091,6 +1430,47 @@ export default function App() {
                               <div>
                                 <p className="text-xs text-slate-500 mb-1">Qtd. scopes</p>
                                 <p className="text-sm text-slate-300">{integration.scopes.length}</p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4 border-b border-slate-800/60 mb-4">
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Cliente</p>
+                                <p className="text-sm text-slate-300 break-words">{clientLabel}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Loja Mercado Livre</p>
+                                <p className="text-sm text-slate-300 break-words">{integration.storeNickname}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Proprietario</p>
+                                <p className="text-sm text-slate-300 break-words">{integration.ownerName}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Email</p>
+                                <p className="text-sm text-slate-300 break-all">{integration.email}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Cidade</p>
+                                <p className="text-sm text-slate-300">
+                                  {integration.city}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">CNPJ</p>
+                                <p className="text-sm text-slate-300">{integration.cnpj}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Reputacao</p>
+                                <p className="text-sm text-slate-300">{integration.reputationLevel}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Experiencia</p>
+                                <p className="text-sm text-slate-300">{integration.sellerExperience}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">Conta criada</p>
+                                <p className="text-sm text-slate-300">{formatYear(integration.accountCreatedAt)}</p>
                               </div>
                             </div>
 
@@ -1133,6 +1513,24 @@ export default function App() {
                                   className="overflow-hidden"
                                 >
                                   <div className="pt-4 mt-4 border-t border-slate-800/60 space-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <div>
+                                        <p className="text-xs text-slate-500 mb-1">Razao social / Nome empresarial</p>
+                                        <p className="text-xs text-slate-300 break-words">{integration.businessName}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-slate-500 mb-1">Marca da loja</p>
+                                        <p className="text-xs text-slate-300 break-words">{integration.brandName}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-slate-500 mb-1">Data da conta no Mercado Livre</p>
+                                        <p className="text-xs text-slate-300">{formatDateTime(integration.accountCreatedAt)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-slate-500 mb-1">Ultima sincronizacao de perfil</p>
+                                        <p className="text-xs text-slate-300">{formatDateTime(integration.profileSyncedAt)}</p>
+                                      </div>
+                                    </div>
                                     <div>
                                       <p className="text-xs text-slate-500 mb-1">Access token</p>
                                       <div className="p-2 bg-slate-950 rounded border border-slate-800 font-mono text-xs text-slate-400 break-all">
@@ -1157,6 +1555,8 @@ export default function App() {
                             </AnimatePresence>
                           </div>
                         </GlassCard>
+                          );
+                        })()}
                       </motion.div>
                     ))
                   ) : (
@@ -1260,6 +1660,30 @@ export default function App() {
                       {currentToken?.scopeSummary || meta.currentScopeSummary}
                     </p>
                   </div>
+                  {currentToken && (
+                    <div className="pt-3 border-t border-slate-800/60 grid grid-cols-1 gap-2">
+                      <div className="flex justify-between items-center gap-3">
+                        <span className="text-sm text-slate-400">Loja</span>
+                        <span className="text-sm text-slate-300">{currentToken.storeNickname}</span>
+                      </div>
+                      <div className="flex justify-between items-center gap-3">
+                        <span className="text-sm text-slate-400">Proprietario</span>
+                        <span className="text-sm text-slate-300">{currentToken.ownerName}</span>
+                      </div>
+                      <div className="flex justify-between items-center gap-3">
+                        <span className="text-sm text-slate-400">Email</span>
+                        <span className="text-sm text-slate-300 break-all text-right">{currentToken.email}</span>
+                      </div>
+                      <div className="flex justify-between items-center gap-3">
+                        <span className="text-sm text-slate-400">CNPJ</span>
+                        <span className="text-sm text-slate-300">{currentToken.cnpj}</span>
+                      </div>
+                      <div className="flex justify-between items-center gap-3">
+                        <span className="text-sm text-slate-400">Ultima sync perfil</span>
+                        <span className="text-sm text-slate-300">{formatDateTime(currentToken.profileSyncedAt)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-slate-500">Nenhum token ativo no momento.</p>
@@ -1317,10 +1741,52 @@ export default function App() {
                   </p>
                 </div>
                 <div>
+                  <p className="text-xs text-slate-500 mb-1">Rota protegida de webhooks</p>
+                  <p className="text-sm font-mono text-slate-300 bg-slate-950 p-1.5 rounded border border-slate-800 break-all">
+                    {meta.webhookDashboardPath}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Endpoints de webhook aceitos</p>
+                  <p className="text-sm font-mono text-slate-300 bg-slate-950 p-1.5 rounded border border-slate-800 break-all">
+                    {meta.webhookPaths.join(' • ')}
+                  </p>
+                </div>
+                <div>
                   <p className="text-xs text-slate-500 mb-1">Arquivo de historico</p>
                   <p className="text-sm font-mono text-slate-300 bg-slate-950 p-1.5 rounded border border-slate-800 break-all">
                     {meta.authorizationsFile}
                   </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Arquivo de perfis enriquecidos</p>
+                  <p className="text-sm font-mono text-slate-300 bg-slate-950 p-1.5 rounded border border-slate-800 break-all">
+                    {meta.integrationsFile}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Arquivo de logs da API ML</p>
+                  <p className="text-sm font-mono text-slate-300 bg-slate-950 p-1.5 rounded border border-slate-800 break-all">
+                    {meta.meliApiLogsFile}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Perfis sincronizados</p>
+                    <p className="text-sm text-slate-300">{meta.totalProfiles}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Perfis com CNPJ</p>
+                    <p className="text-sm text-slate-300">{meta.profilesWithCnpj}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Ultima sync de perfil</p>
+                    <p className="text-xs text-slate-300">{formatDateTime(meta.latestProfileSyncAt)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Ultima chamada API ML</p>
+                    <p className="text-xs text-slate-300">{formatDateTime(meta.latestMeliApiCallAt)}</p>
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Resumo dos scopes atuais</p>

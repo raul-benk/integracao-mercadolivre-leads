@@ -1,0 +1,5 @@
+{
+  "name": "Meli Webhook Monitor",
+  "description": "Dashboard administrativo para monitoramento de webhooks do Mercado Livre.",
+  "requestFramePermissions": []
+}

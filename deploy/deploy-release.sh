@@ -87,4 +87,7 @@ echo
 echo "==> Deploy finished"
 echo "Public health check: https://${APP_DOMAIN}/meli/health"
 echo "Public status check: https://${APP_DOMAIN}/meli/auth/status"
+echo "Webhook endpoint:    https://${APP_DOMAIN}/meli/mercadolivre/webhook"
 echo "Admin dashboard:     https://${APP_DOMAIN}/meli/admin/integrations?token=SEU_TOKEN"
+echo "Enrich endpoint:     https://${APP_DOMAIN}/meli/admin/integrations/enrich?token=SEU_TOKEN"
+echo "Webhook dashboard:   https://${APP_DOMAIN}/meli/integracoes/mercadolivre/webhooks?token=SEU_TOKEN"

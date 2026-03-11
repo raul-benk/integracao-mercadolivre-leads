@@ -3,6 +3,11 @@ node_modules
 tokens.json
 notifications.log
 authorizations.json
+integrations.json
+meli-api-logs.json
+webhooks.json
+webhook-events.json
+webhook-process.log
 .DS_Store
 public/mercado-livre-oauth-admin/.env.local
 public/oauth-callback-result/.env.local

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>__PAGE_TITLE__</title>
+  <link rel="stylesheet" href="/assets/zoi/theme.css">
+  <style>
+    :root {
+      --panel-border: rgba(20, 20, 20, 0.1);
+      --panel-bg: rgba(255, 255, 255, 0.9);
+      --panel-bg-strong: rgba(255, 255, 255, 0.96);
+      --panel-shadow: 0 18px 48px rgba(20, 20, 20, 0.08);
+      --success-soft: rgba(181, 255, 129, 0.22);
+      --warning-soft: rgba(251, 140, 0, 0.16);
+      --danger-soft: rgba(229, 57, 53, 0.16);
+      --pending-soft: rgba(37, 99, 235, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: var(--space-5);
+      background:
+        radial-gradient(circle at 0% 0%, rgba(181, 255, 129, 0.28), transparent 28%),
+        linear-gradient(180deg, #f6fbf4 0%, #fcfdfb 40%, #ffffff 100%);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(to right, rgba(20, 20, 20, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(20, 20, 20, 0.02) 1px, transparent 1px);
+      background-size: 2rem 2rem;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent 75%);
+    }
+
+    .dashboard-shell {
+      width: min(78rem, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: var(--space-4);
+      position: relative;
+      z-index: 1;
+    }
+
+    .panel {
+      border: 1px solid var(--panel-border);
+      border-radius: 1rem;
+      background: var(--panel-bg);
+      box-shadow: var(--panel-shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: clamp(1.2rem, 2.8vw, 2rem);
+      background:
+        linear-gradient(135deg, rgba(18, 22, 25, 0.95), rgba(38, 45, 49, 0.9)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.08);
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .hero h1,
+    .hero p,
+    .hero code,
+    .hero strong {
+      margin: 0;
+      color: #ffffff;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+      padding: 0.35rem 0.7rem;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .hero-kicker::before {
+      content: "";
+      width: 0.48rem;
+      height: 0.48rem;
+      border-radius: 50%;
+      background: var(--green-400);
+      box-shadow: 0 0 12px rgba(181, 255, 129, 0.75);
+    }
+
+    .hero-title {
+      margin: 0 0 var(--space-2);
+      font-size: clamp(1.65rem, 4vw, 2.3rem);
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+    }
+
+    .hero-subtitle {
+      color: rgba(255, 255, 255, 0.74);
+      max-width: 70ch;
+      font-size: 0.95rem;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 0.45rem 0.75rem;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 0.82rem;
+    }
+
+    .hero-feedback {
+      font-size: 0.84rem;
+      color: #fef08a;
+      background: rgba(234, 179, 8, 0.15);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      border-radius: 0.7rem;
+      padding: 0.55rem 0.7rem;
+    }
+
+    .notice {
+      font-size: 0.84rem;
+      color: #fef08a;
+      background: rgba(234, 179, 8, 0.15);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      border-radius: 0.7rem;
+      padding: 0.55rem 0.7rem;
+      margin: 0;
+    }
+
+    .stats-panel {
+      padding: var(--space-5);
+      display: grid;
+      gap: var(--space-4);
+      background: var(--panel-bg-strong);
+    }
+
+    .stats-head h2 {
+      margin: 0;
+      font-size: 1.28rem;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+    }
+
+    .stats-head p {
+      margin: 0.4rem 0 0;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-3);
+    }
+
+    .stat {
+      padding: var(--space-4);
+      border-radius: 0.8rem;
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      background: rgba(20, 20, 20, 0.03);
+    }
+
+    .stat span {
+      display: block;
+      margin-bottom: var(--space-2);
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.72rem;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.45rem;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      font-family: var(--font-display);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+      gap: var(--space-4);
+      align-items: start;
+    }
+
+    .table-panel {
+      padding: var(--space-5);
+      background: var(--panel-bg-strong);
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .table-panel h2 {
+      margin: 0;
+      font-size: 1.16rem;
+      letter-spacing: -0.02em;
+    }
+
+    .table-panel p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 0.9rem;
+      background: #ffffff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      text-align: left;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+      background: #f7faf7;
+      border-bottom: 1px solid rgba(20, 20, 20, 0.08);
+      padding: 0.65rem 0.72rem;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 0.72rem;
+      border-bottom: 1px solid rgba(20, 20, 20, 0.06);
+      vertical-align: top;
+      font-size: 0.85rem;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr:hover {
+      background: rgba(181, 255, 129, 0.08);
+    }
+
+    tbody tr.is-selected {
+      background: rgba(181, 255, 129, 0.16);
+    }
+
+    code {
+      font-family: "SFMono-Regular", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+      color: #1f2f57;
+      word-break: break-all;
+    }
+
+    .cell-stack {
+      display: grid;
+      gap: 0.18rem;
+    }
+
+    .cell-stack strong {
+      font-size: 0.83rem;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .cell-muted {
+      font-size: 0.74rem;
+      color: var(--text-tertiary);
+      line-height: 1.25;
+      word-break: break-word;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+      border-radius: var(--radius-full);
+      padding: 0.24rem 0.55rem;
+      font-size: 0.73rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+
+    .status-pill.is-success {
+      background: var(--success-soft);
+      color: #185f31;
+      border-color: rgba(51, 140, 71, 0.25);
+    }
+
+    .status-pill.is-warning {
+      background: var(--warning-soft);
+      color: #875307;
+      border-color: rgba(251, 140, 0, 0.25);
+    }
+
+    .status-pill.is-error {
+      background: var(--danger-soft);
+      color: #8f231f;
+      border-color: rgba(211, 47, 47, 0.25);
+    }
+
+    .status-pill.is-pending {
+      background: var(--pending-soft);
+      color: #1e3a8a;
+      border-color: rgba(37, 99, 235, 0.25);
+    }
+
+    .btn-detail {
+      border: 1px solid rgba(20, 20, 20, 0.12);
+      background: rgba(20, 20, 20, 0.04);
+      color: var(--text-primary);
+      border-radius: 0.55rem;
+      padding: 0.36rem 0.52rem;
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color var(--duration-fast) var(--ease-out);
+    }
+
+    .btn-detail:hover {
+      background: rgba(20, 20, 20, 0.1);
+    }
+
+    .side-stack {
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .side-card {
+      padding: var(--space-5);
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .side-card h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .json-viewer {
+      min-height: 320px;
+      max-height: 540px;
+      overflow: auto;
+      margin: 0;
+      border: 1px solid rgba(20, 20, 20, 0.12);
+      border-radius: 0.8rem;
+      background: #0f172a;
+      color: #d8e2ff;
+      padding: 0.8rem;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: "SFMono-Regular", ui-monospace, Menlo, monospace;
+    }
+
+    .side-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: var(--text-secondary);
+      display: grid;
+      gap: 0.8rem;
+      font-size: 0.86rem;
+    }
+
+    .side-list li strong {
+      color: var(--text-primary);
+      display: block;
+      margin-bottom: 0.2rem;
+      font-size: 0.86rem;
+    }
+
+    .side-list li span,
+    .side-list li small {
+      display: block;
+      color: var(--text-tertiary);
+    }
+
+    .diag-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: var(--text-secondary);
+      display: grid;
+      gap: 0.5rem;
+      font-size: 0.84rem;
+    }
+
+    .diag-list code {
+      font-size: 0.72rem;
+    }
+
+    .footer-note {
+      margin: 0;
+      text-align: center;
+      font-size: 0.84rem;
+      color: var(--text-tertiary);
+    }
+
+    @media (max-width: 1100px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 920px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: var(--space-3);
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="dashboard-shell">
+    <header class="panel hero">
+      <div class="hero-top">
+        <div>
+          <p class="hero-kicker">Mercado Livre / Admin</p>
+          <h1 class="hero-title">Painel de Webhooks</h1>
+          <p class="hero-subtitle">
+            Monitoramento operacional dos webhooks recebidos com contexto de cliente enriquecido para acelerar triagem e suporte.
+          </p>
+        </div>
+      </div>
+
+      <div class="hero-meta">
+        <span class="meta-chip">Dashboard: <strong><code>__PUBLIC_DASHBOARD_PATH__</code></strong></span>
+        <span class="meta-chip">Endpoints: <strong><code>__WEBHOOK_PATHS__</code></strong></span>
+        <span class="meta-chip">Config: <strong><code>__CONFIG_STATUS__</code></strong></span>
+      </div>
+
+      __TRUNCATION_NOTICE__
+    </header>
+
+    <section class="panel stats-panel">
+      <div class="stats-head">
+        <h2>Resumo de recebimento</h2>
+        <p>Indicadores de processamento, cobertura de identificação e volume por cliente.</p>
+      </div>
+      <div class="stats-grid">
+        <article class="stat">
+          <span>Recebidos</span>
+          <strong>__TOTAL_RECEIVED__</strong>
+        </article>
+        <article class="stat">
+          <span>Processados</span>
+          <strong>__TOTAL_PROCESSED__</strong>
+        </article>
+        <article class="stat">
+          <span>Erros</span>
+          <strong>__TOTAL_ERRORS__</strong>
+        </article>
+        <article class="stat">
+          <span>Pendentes</span>
+          <strong>__TOTAL_PENDING__</strong>
+        </article>
+        <article class="stat">
+          <span>Com cliente identificado</span>
+          <strong>__TOTAL_WITH_PROFILE__</strong>
+        </article>
+        <article class="stat">
+          <span>Sem vinculo de cliente</span>
+          <strong>__TOTAL_WITHOUT_PROFILE__</strong>
+        </article>
+        <article class="stat">
+          <span>Clientes unicos no webhook</span>
+          <strong>__UNIQUE_IDENTIFIED_CLIENTS__</strong>
+        </article>
+        <article class="stat">
+          <span>Ultimo recebido</span>
+          <strong>__LATEST_RECEIVED_AT__</strong>
+        </article>
+        <article class="stat">
+          <span>Ultimo processado</span>
+          <strong>__LATEST_PROCESSED_AT__</strong>
+        </article>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <section class="panel table-panel">
+        <h2>Tabela de webhooks recebidos</h2>
+        <p>Clique em <strong>Ver JSON</strong> para abrir payload bruto e evento processado.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Recebido em</th>
+                <th>Topic</th>
+                <th>Resource</th>
+                <th>Status</th>
+                <th>User ID</th>
+                <th>Cliente / Proprietario</th>
+                <th>Email / CNPJ</th>
+                <th>Cidade / Conta</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+              __WEBHOOK_ROWS__
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="side-stack">
+        <article class="panel side-card">
+          <h2>JSON completo do webhook</h2>
+          <pre id="webhook-json" class="json-viewer">Selecione um webhook na tabela.</pre>
+        </article>
+
+        <article class="panel side-card">
+          <h2>Erros recentes</h2>
+          <ol class="side-list">
+            __RECENT_ERRORS__
+          </ol>
+        </article>
+      </aside>
+    </section>
+
+    <section class="panel side-card">
+      <h2>Arquivos e diagnostico</h2>
+      <ul class="diag-list">
+        <li>Dashboard path interno: <code>__DASHBOARD_PATH__</code></li>
+        <li>Webhooks: <code>__WEBHOOKS_FILE__</code></li>
+        <li>Eventos processados: <code>__WEBHOOK_EVENTS_FILE__</code></li>
+        <li>Log de processamento: <code>__WEBHOOK_PROCESS_LOG_FILE__</code></li>
+      </ul>
+      <ul class="diag-list">
+        __CONFIG_ERRORS__
+      </ul>
+    </section>
+
+    <p class="footer-note">Para resposta estruturada via API, use <code>?format=json</code> na URL.</p>
+  </main>
+
+  <script id="webhook-data" type="application/json">__WEBHOOK_DATA_JSON__</script>
+  <script>
+    (function initWebhookDashboard() {
+      const dataNode = document.getElementById('webhook-data');
+      const jsonNode = document.getElementById('webhook-json');
+      if (!dataNode || !jsonNode) {
+        return;
+      }
+
+      let webhookRecords = [];
+      try {
+        webhookRecords = JSON.parse(dataNode.textContent || '[]');
+      } catch (error) {
+        jsonNode.textContent = 'Falha ao carregar os dados do dashboard.';
+        return;
+      }
+
+      const recordMap = new Map(webhookRecords.map((item) => [String(item.id), item]));
+      const detailButtons = document.querySelectorAll('[data-webhook-detail]');
+
+      for (const button of detailButtons) {
+        button.addEventListener('click', function handleDetailClick() {
+          const webhookId = String(button.getAttribute('data-webhook-detail') || '');
+          const record = recordMap.get(webhookId);
+          if (!record) {
+            jsonNode.textContent = 'Webhook nao encontrado.';
+            return;
+          }
+
+          jsonNode.textContent = JSON.stringify(record, null, 2);
+          for (const row of document.querySelectorAll('tbody tr')) {
+            row.classList.remove('is-selected');
+          }
+          const selectedRow = button.closest('tr');
+          if (selectedRow) {
+            selectedRow.classList.add('is-selected');
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
