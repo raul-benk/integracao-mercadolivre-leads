@@ -50,6 +50,8 @@ interface Integration {
   sellerExperience: string;
   accountCreatedAt: string | null;
   profileSyncedAt: string | null;
+  forwardWebhookUrl: string;
+  forwardWebhookUpdatedAt: string | null;
 }
 
 interface DashboardMeta {
@@ -59,6 +61,7 @@ interface DashboardMeta {
   publicDashboardPath: string;
   webhookDashboardPath: string;
   publicWebhookDashboardPath: string;
+  integrationForwardPath: string;
   webhookPaths: string[];
   authorizationsFile: string;
   latestUserId: string;
@@ -110,6 +113,7 @@ const DEFAULT_META: DashboardMeta = {
   publicDashboardPath: '/meli/admin/integrations',
   webhookDashboardPath: '/integracoes/mercadolivre/webhooks',
   publicWebhookDashboardPath: '/meli/integracoes/mercadolivre/webhooks',
+  integrationForwardPath: '/admin/integrations/webhook-forward',
   webhookPaths: ['/notifications', '/mercadolivre/webhook'],
   authorizationsFile: 'Nao informado',
   latestUserId: 'Nao identificado',
@@ -547,6 +551,18 @@ const mapIntegration = (
       profileRecord?.lastEnrichedAt) as unknown,
     null,
   );
+  const forwardWebhookUrl = pickStringWithNested(
+    rawItem,
+    profileRecord,
+    ['lead_forward_webhook_url', 'forward_webhook_url', 'webhook_forward_url'],
+    '',
+  );
+  const forwardWebhookUpdatedAt = normalizeDate(
+    (rawItem.lead_forward_updated_at ??
+      rawItem.forward_webhook_updated_at ??
+      profileRecord?.lead_forward_updated_at) as unknown,
+    null,
+  );
 
   const userName = pickStringWithNested(
     rawItem,
@@ -629,6 +645,8 @@ const mapIntegration = (
     sellerExperience,
     accountCreatedAt,
     profileSyncedAt,
+    forwardWebhookUrl,
+    forwardWebhookUpdatedAt,
   };
 };
 
@@ -750,6 +768,13 @@ const parseDashboardPayload = (payload: unknown): ParsedDashboardPayload => {
           DEFAULT_META.publicWebhookDashboardPath,
         )
       : DEFAULT_META.publicWebhookDashboardPath,
+    integrationForwardPath: payloadRecord
+      ? pickString(
+          payloadRecord,
+          ['admin_integration_forward_path'],
+          DEFAULT_META.integrationForwardPath,
+        )
+      : DEFAULT_META.integrationForwardPath,
     webhookPaths: webhookPaths.length > 0 ? webhookPaths : DEFAULT_META.webhookPaths,
     authorizationsFile: payloadRecord
       ? pickString(
@@ -909,6 +934,11 @@ export default function App() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [webhookDraftByUserId, setWebhookDraftByUserId] = useState<Record<string, string>>({});
+  const [webhookFeedbackByUserId, setWebhookFeedbackByUserId] = useState<
+    Record<string, { type: 'success' | 'error'; message: string }>
+  >({});
+  const [savingWebhookUsers, setSavingWebhookUsers] = useState<Set<string>>(new Set());
 
   const pathPrefix = useMemo(() => parsePathPrefix(), []);
   const authStartHref = useMemo(
@@ -926,6 +956,10 @@ export default function App() {
   const enrichPath = useMemo(
     () => `${ADMIN_DASHBOARD_PATH}/enrich`,
     [],
+  );
+  const integrationForwardPath = useMemo(
+    () => meta.integrationForwardPath || DEFAULT_META.integrationForwardPath,
+    [meta.integrationForwardPath],
   );
 
   const handleCopyUrl = async () => {
@@ -993,6 +1027,88 @@ export default function App() {
       });
     } finally {
       setIsEnriching(false);
+    }
+  };
+
+  const clearWebhookFeedback = (userId: string) => {
+    setWebhookFeedbackByUserId((current) => {
+      const next = {...current};
+      delete next[userId];
+      return next;
+    });
+  };
+
+  const saveForwardWebhook = async (integration: Integration) => {
+    const userId = integration.userId;
+    const inputValue = (webhookDraftByUserId[userId] ?? '').trim();
+
+    setSavingWebhookUsers((current) => {
+      const next = new Set(current);
+      next.add(userId);
+      return next;
+    });
+    clearWebhookFeedback(userId);
+
+    try {
+      const response = await fetch(
+        buildProtectedApiUrl(pathPrefix, integrationForwardPath),
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            webhook_url: inputValue || null,
+          }),
+        },
+      );
+
+      const contentType = response.headers.get('content-type') || '';
+      const payload: unknown = contentType.toLowerCase().includes('application/json')
+        ? await response.json()
+        : null;
+
+      if (!response.ok) {
+        const message = isRecord(payload)
+          ? pickString(payload, ['message', 'error'], `Erro ${response.status} ao salvar webhook.`)
+          : `Erro ${response.status} ao salvar webhook.`;
+        throw new Error(message);
+      }
+
+      const webhookUrl = isRecord(payload)
+        ? pickString(payload, ['webhook_url'], '')
+        : '';
+      const message = isRecord(payload)
+        ? pickString(payload, ['message'], 'Webhook de direcionamento salvo com sucesso.')
+        : 'Webhook de direcionamento salvo com sucesso.';
+
+      setWebhookDraftByUserId((current) => ({
+        ...current,
+        [userId]: webhookUrl,
+      }));
+      setWebhookFeedbackByUserId((current) => ({
+        ...current,
+        [userId]: {type: 'success', message},
+      }));
+      refreshIntegrations();
+    } catch (error) {
+      setWebhookFeedbackByUserId((current) => ({
+        ...current,
+        [userId]: {
+          type: 'error',
+          message: error instanceof Error
+            ? error.message
+            : 'Falha ao salvar webhook de direcionamento.',
+        },
+      }));
+    } finally {
+      setSavingWebhookUsers((current) => {
+        const next = new Set(current);
+        next.delete(userId);
+        return next;
+      });
     }
   };
 
@@ -1081,6 +1197,32 @@ export default function App() {
     });
   }, [integrations]);
 
+  useEffect(() => {
+    const nextDrafts: Record<string, string> = {};
+    const validUserIds = new Set<string>();
+
+    integrations.forEach((integration) => {
+      validUserIds.add(integration.userId);
+      if (!Object.prototype.hasOwnProperty.call(nextDrafts, integration.userId)) {
+        nextDrafts[integration.userId] = integration.forwardWebhookUrl;
+      }
+    });
+
+    setWebhookDraftByUserId(nextDrafts);
+    setWebhookFeedbackByUserId((current) => {
+      const next: Record<string, {type: 'success' | 'error'; message: string}> = {};
+      Object.keys(current).forEach((userId) => {
+        if (validUserIds.has(userId)) {
+          next[userId] = current[userId];
+        }
+      });
+      return next;
+    });
+    setSavingWebhookUsers((current) =>
+      new Set([...current].filter((userId) => validUserIds.has(userId))),
+    );
+  }, [integrations]);
+
   const filteredIntegrations = useMemo(() => {
     const normalizedSearch = searchTerm.toLowerCase().trim();
 
@@ -1103,7 +1245,8 @@ export default function App() {
           integration.scopeSummary.toLowerCase().includes(normalizedSearch) ||
           integration.scopes.some((scope) => scope.toLowerCase().includes(normalizedSearch)) ||
           integration.accessToken.toLowerCase().includes(normalizedSearch) ||
-          integration.refreshToken.toLowerCase().includes(normalizedSearch);
+          integration.refreshToken.toLowerCase().includes(normalizedSearch) ||
+          integration.forwardWebhookUrl.toLowerCase().includes(normalizedSearch);
 
       const matchesStatus = filterStatus === 'Todas'
         ? true
@@ -1489,6 +1632,83 @@ export default function App() {
                                 </div>
                               ) : (
                                 <p className="text-xs text-slate-500">{integration.scopeSummary}</p>
+                              )}
+                            </div>
+
+                            <div className="mb-4 p-3 rounded-lg border border-slate-800/70 bg-slate-950/40 space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div>
+                                  <p className="text-xs text-slate-500 mb-1">Webhook de direcionamento</p>
+                                  <p className="text-xs text-slate-400">
+                                    Repassa automaticamente os dados processados desta integracao.
+                                  </p>
+                                </div>
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded text-[11px] font-semibold tracking-wide uppercase ${
+                                    integration.forwardWebhookUrl
+                                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                  }`}
+                                >
+                                  {integration.forwardWebhookUrl ? 'Ativo' : 'Nao configurado'}
+                                </span>
+                              </div>
+
+                              <input
+                                type="url"
+                                placeholder="https://seu-endpoint.com/webhook"
+                                value={webhookDraftByUserId[integration.userId] ?? ''}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setWebhookDraftByUserId((current) => ({
+                                    ...current,
+                                    [integration.userId]: value,
+                                  }));
+                                  clearWebhookFeedback(integration.userId);
+                                }}
+                                className="w-full px-3 py-2 bg-slate-900/70 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                              />
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  onClick={() => saveForwardWebhook(integration)}
+                                  disabled={savingWebhookUsers.has(integration.userId)}
+                                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-slate-900 text-xs font-semibold rounded-md transition-colors"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${savingWebhookUsers.has(integration.userId) ? 'animate-spin' : ''}`} />
+                                  {savingWebhookUsers.has(integration.userId) ? 'Salvando...' : 'Salvar webhook'}
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    setWebhookDraftByUserId((current) => ({
+                                      ...current,
+                                      [integration.userId]: '',
+                                    }));
+                                    clearWebhookFeedback(integration.userId);
+                                  }}
+                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-md transition-colors"
+                                >
+                                  Limpar campo
+                                </button>
+
+                                {integration.forwardWebhookUpdatedAt && (
+                                  <span className="text-[11px] text-slate-500">
+                                    Atualizado em {formatDateTime(integration.forwardWebhookUpdatedAt)}
+                                  </span>
+                                )}
+                              </div>
+
+                              {webhookFeedbackByUserId[integration.userId] && (
+                                <p
+                                  className={`text-xs ${
+                                    webhookFeedbackByUserId[integration.userId].type === 'success'
+                                      ? 'text-emerald-300'
+                                      : 'text-rose-300'
+                                  }`}
+                                >
+                                  {webhookFeedbackByUserId[integration.userId].message}
+                                </p>
                               )}
                             </div>
 

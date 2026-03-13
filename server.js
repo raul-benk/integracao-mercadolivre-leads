@@ -4,6 +4,51 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+function loadEnvFile(envFilePath = path.resolve(__dirname, ".env")) {
+  if (!fs.existsSync(envFilePath)) {
+    return;
+  }
+
+  const envContent = fs.readFileSync(envFilePath, "utf8");
+  const lines = envContent.split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const trimmedLine = rawLine.trim();
+    if (!trimmedLine || trimmedLine.startsWith("#")) {
+      continue;
+    }
+
+    const line = trimmedLine.startsWith("export ")
+      ? trimmedLine.slice(7).trim()
+      : trimmedLine;
+    const equalIndex = line.indexOf("=");
+    if (equalIndex <= 0) {
+      continue;
+    }
+
+    const key = line.slice(0, equalIndex).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      continue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+      continue;
+    }
+
+    let value = line.slice(equalIndex + 1).trim();
+    if (
+      (value.startsWith("\"") && value.endsWith("\"")) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile();
+
 const app = express();
 app.use(express.json());
 
@@ -17,6 +62,10 @@ const NOTIFICATIONS_PATH = NOTIFICATIONS_PATH_RAW.toLowerCase();
 const NOTIFICATIONS_URL = process.env.MELI_NOTIFICATIONS_URL || "";
 const WEBHOOK_PATH_RAW = process.env.MELI_WEBHOOK_PATH || "/mercadolivre/webhook";
 const WEBHOOK_PATH = WEBHOOK_PATH_RAW.toLowerCase();
+const DOIN_MOTORS_LEADS_PATH_RAW = process.env.DOIN_MOTORS_LEADS_PATH || "/doin-motors/leads";
+const DOIN_MOTORS_LEADS_PATH = DOIN_MOTORS_LEADS_PATH_RAW.toLowerCase();
+const DOIN_MOTORS_WEBHOOK_URL = process.env.DOIN_MOTORS_WEBHOOK_URL
+  || "https://services.leadconnectorhq.com/hooks/7RWBkCoUMa5ijFHq66kC/webhook-trigger/62990790-0247-4df7-b72d-cfed1bdfdee1";
 const WEBHOOK_DASHBOARD_PATH = "/integracoes/mercadolivre/webhooks";
 const PUBLIC_WEBHOOK_DASHBOARD_PATH = `/meli${WEBHOOK_DASHBOARD_PATH}`;
 
@@ -44,8 +93,41 @@ const WEBHOOK_EVENTS_FILE = path.resolve(
 const WEBHOOK_PROCESS_LOG_FILE = path.resolve(
   process.env.MELI_WEBHOOK_PROCESS_LOG_FILE || path.join(path.dirname(NOTIFICATIONS_FILE), "webhook-process.log")
 );
+const DOIN_MOTORS_FORWARD_LOG_FILE = path.resolve(
+  process.env.DOIN_MOTORS_FORWARD_LOG_FILE || path.join(path.dirname(NOTIFICATIONS_FILE), "doin-leads-forward.log")
+);
 const ADMIN_DASHBOARD_TOKEN = process.env.MELI_ADMIN_DASHBOARD_TOKEN || "";
+const DOIN_MOTORS_INBOUND_TOKEN = process.env.DOIN_MOTORS_INBOUND_TOKEN || "";
+const MELI_FORWARD_TIMEOUT_MS_RAW = Number(
+  process.env.MELI_FORWARD_TIMEOUT_MS || 15000
+);
+const MELI_FORWARD_TIMEOUT_MS =
+  Number.isFinite(MELI_FORWARD_TIMEOUT_MS_RAW) && MELI_FORWARD_TIMEOUT_MS_RAW > 0
+    ? Math.round(MELI_FORWARD_TIMEOUT_MS_RAW)
+    : 15000;
+const MELI_FORWARD_RETRIES_RAW = Number(
+  process.env.MELI_FORWARD_RETRIES || 2
+);
+const MELI_FORWARD_RETRIES =
+  Number.isFinite(MELI_FORWARD_RETRIES_RAW) && MELI_FORWARD_RETRIES_RAW >= 0
+    ? Math.floor(MELI_FORWARD_RETRIES_RAW)
+    : 2;
+const DOIN_MOTORS_FORWARD_TIMEOUT_MS_RAW = Number(
+  process.env.DOIN_MOTORS_FORWARD_TIMEOUT_MS || 15000
+);
+const DOIN_MOTORS_FORWARD_TIMEOUT_MS =
+  Number.isFinite(DOIN_MOTORS_FORWARD_TIMEOUT_MS_RAW) && DOIN_MOTORS_FORWARD_TIMEOUT_MS_RAW > 0
+    ? Math.round(DOIN_MOTORS_FORWARD_TIMEOUT_MS_RAW)
+    : 15000;
+const DOIN_MOTORS_FORWARD_RETRIES_RAW = Number(
+  process.env.DOIN_MOTORS_FORWARD_RETRIES || 2
+);
+const DOIN_MOTORS_FORWARD_RETRIES =
+  Number.isFinite(DOIN_MOTORS_FORWARD_RETRIES_RAW) && DOIN_MOTORS_FORWARD_RETRIES_RAW >= 0
+    ? Math.floor(DOIN_MOTORS_FORWARD_RETRIES_RAW)
+    : 2;
 const ADMIN_DASHBOARD_PATH = "/admin/integrations";
+const ADMIN_INTEGRATION_FORWARD_PATH = `${ADMIN_DASHBOARD_PATH}/webhook-forward`;
 const PUBLIC_DASHBOARD_PATH = `/meli${ADMIN_DASHBOARD_PATH}`;
 const ZOI_STYLES_DIR = path.resolve(
   __dirname,
@@ -105,6 +187,7 @@ const WEBHOOK_ROUTE_PATHS = [...new Set([NOTIFICATIONS_PATH, WEBHOOK_PATH])];
 const WEBHOOK_ROUTE_PATHS_NORMALIZED = WEBHOOK_ROUTE_PATHS.map((routePath) =>
   routePath.replace(/\/+$/, "") || "/"
 );
+const DOIN_MOTORS_LEADS_PATH_NORMALIZED = DOIN_MOTORS_LEADS_PATH.replace(/\/+$/, "") || "/";
 
 const pendingStates = new Map();
 app.use("/assets/zoi", express.static(ZOI_STYLES_DIR));
@@ -154,6 +237,34 @@ function getConfigErrors() {
     errors.push("MELI_WEBHOOK_PATH deve iniciar com /");
   }
 
+  if (DOIN_MOTORS_LEADS_PATH_RAW !== DOIN_MOTORS_LEADS_PATH) {
+    errors.push("DOIN_MOTORS_LEADS_PATH deve usar apenas minusculas");
+  }
+
+  if (!DOIN_MOTORS_LEADS_PATH.startsWith("/")) {
+    errors.push("DOIN_MOTORS_LEADS_PATH deve iniciar com /");
+  }
+
+  if (!/^https?:\/\//i.test(DOIN_MOTORS_WEBHOOK_URL)) {
+    errors.push("DOIN_MOTORS_WEBHOOK_URL deve ser uma URL HTTP(S) valida");
+  }
+
+  if (!Number.isFinite(MELI_FORWARD_TIMEOUT_MS_RAW) || MELI_FORWARD_TIMEOUT_MS_RAW <= 0) {
+    errors.push("MELI_FORWARD_TIMEOUT_MS deve ser um numero positivo");
+  }
+
+  if (!Number.isFinite(MELI_FORWARD_RETRIES_RAW) || MELI_FORWARD_RETRIES_RAW < 0) {
+    errors.push("MELI_FORWARD_RETRIES deve ser zero ou maior");
+  }
+
+  if (!Number.isFinite(DOIN_MOTORS_FORWARD_TIMEOUT_MS_RAW) || DOIN_MOTORS_FORWARD_TIMEOUT_MS_RAW <= 0) {
+    errors.push("DOIN_MOTORS_FORWARD_TIMEOUT_MS deve ser um numero positivo");
+  }
+
+  if (!Number.isFinite(DOIN_MOTORS_FORWARD_RETRIES_RAW) || DOIN_MOTORS_FORWARD_RETRIES_RAW < 0) {
+    errors.push("DOIN_MOTORS_FORWARD_RETRIES deve ser zero ou maior");
+  }
+
   return errors;
 }
 
@@ -174,17 +285,23 @@ function readTokens() {
   return readJsonFile(TOKENS_FILE, null);
 }
 
-function writeTokens(tokenPayload) {
-  const now = Date.now();
-  const expiresIn = Number(tokenPayload.expires_in || 0);
-  const expiresAt =
-    expiresIn > 0 ? new Date(now + expiresIn * 1000).toISOString() : null;
+function normalizeTokenTimestamps(tokenPayload, nowMs = Date.now()) {
+  const nowIso = new Date(nowMs).toISOString();
+  const expiresIn = Number(tokenPayload?.expires_in || 0);
+  const computedExpiresAt = Number.isFinite(expiresIn) && expiresIn > 0
+    ? new Date(nowMs + expiresIn * 1000).toISOString()
+    : null;
+  const fallbackExpiresAt = toNullableString(tokenPayload?.expires_at);
 
-  const normalized = {
+  return {
     ...tokenPayload,
-    obtained_at: new Date(now).toISOString(),
-    expires_at: expiresAt,
+    obtained_at: nowIso,
+    expires_at: computedExpiresAt || fallbackExpiresAt,
   };
+}
+
+function writeTokens(tokenPayload) {
+  const normalized = normalizeTokenTimestamps(tokenPayload);
 
   fs.mkdirSync(path.dirname(TOKENS_FILE), { recursive: true });
   fs.writeFileSync(TOKENS_FILE, JSON.stringify(normalized, null, 2), "utf8");
@@ -226,6 +343,37 @@ function appendAuthorizationRecord(tokens) {
   records.push(record);
   writeAuthorizations(records);
   return record;
+}
+
+function updateAuthorizationRecordTokens(authorizationId, tokens) {
+  const normalizedAuthorizationId = toNullableString(authorizationId);
+  if (!normalizedAuthorizationId) {
+    return null;
+  }
+
+  const records = readAuthorizations();
+  const index = records.findIndex((record) => toNullableString(record?.id) === normalizedAuthorizationId);
+  if (index < 0) {
+    return null;
+  }
+
+  const existing = records[index] || {};
+  const normalizedTokens = normalizeTokenTimestamps(tokens || {});
+  const updatedRecord = {
+    ...existing,
+    user_id: toNullableNumber(normalizedTokens.user_id) ?? toNullableNumber(existing.user_id),
+    scope: toNullableString(normalizedTokens.scope) || toNullableString(existing.scope),
+    authorized_at: toNullableString(normalizedTokens.obtained_at) || toNullableString(existing.authorized_at) || new Date().toISOString(),
+    expires_at: toNullableString(normalizedTokens.expires_at) || toNullableString(existing.expires_at),
+    access_token_preview: maskToken(normalizedTokens.access_token) || toNullableString(existing.access_token_preview),
+    refresh_token_preview: maskToken(normalizedTokens.refresh_token) || toNullableString(existing.refresh_token_preview),
+    access_token: toNullableString(normalizedTokens.access_token) || toNullableString(existing.access_token),
+    refresh_token: toNullableString(normalizedTokens.refresh_token) || toNullableString(existing.refresh_token),
+  };
+
+  records[index] = updatedRecord;
+  writeAuthorizations(records);
+  return updatedRecord;
 }
 
 function readIntegrations() {
@@ -351,6 +499,27 @@ function appendWebhookProcessLog(eventType, payload) {
   fs.appendFileSync(WEBHOOK_PROCESS_LOG_FILE, `${JSON.stringify(logRecord)}\n`, "utf8");
 }
 
+function appendDoinLeadForwardLog(eventType, payload) {
+  const logRecord = {
+    event: eventType,
+    timestamp: new Date().toISOString(),
+    payload,
+  };
+
+  fs.mkdirSync(path.dirname(DOIN_MOTORS_FORWARD_LOG_FILE), { recursive: true });
+  fs.appendFileSync(DOIN_MOTORS_FORWARD_LOG_FILE, `${JSON.stringify(logRecord)}\n`, "utf8");
+}
+
+function validateDoinLeadPayload(payload) {
+  const errors = [];
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    errors.push("payload_deve_ser_objeto_json");
+  }
+
+  return errors;
+}
+
 function validateWebhookPayload(payload) {
   const errors = [];
 
@@ -398,6 +567,176 @@ function isWebhookRoutePath(pathValue) {
   return WEBHOOK_ROUTE_PATHS_NORMALIZED.includes(normalizedPath);
 }
 
+function isDoinMotorsLeadsRoutePath(pathValue) {
+  const normalizedPath = String(pathValue || "").toLowerCase().replace(/\/+$/, "") || "/";
+  return normalizedPath === DOIN_MOTORS_LEADS_PATH_NORMALIZED;
+}
+
+function resolveDoinInboundToken(req) {
+  const directToken = toNullableString(req.headers["x-doin-token"]);
+  if (directToken) {
+    return directToken;
+  }
+
+  const authorization = toNullableString(req.headers.authorization);
+  if (!authorization) {
+    return null;
+  }
+
+  const match = authorization.match(/^bearer\s+(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  return toNullableString(match[1]);
+}
+
+function ensureDoinInboundAccess(req, res) {
+  if (!DOIN_MOTORS_INBOUND_TOKEN) {
+    return true;
+  }
+
+  const incomingToken = resolveDoinInboundToken(req);
+  if (!incomingToken || incomingToken !== DOIN_MOTORS_INBOUND_TOKEN) {
+    res.status(401).json({
+      ok: false,
+      error: "invalid_doin_token",
+      message: "Token invalido para recepcao dos leads da Doin Motors.",
+    });
+    return false;
+  }
+
+  return true;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function forwardDoinLeadPayload(payload, leadId) {
+  const maxAttempts = DOIN_MOTORS_FORWARD_RETRIES + 1;
+  let lastFailure = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const startedAt = Date.now();
+
+    try {
+      const response = await axios.post(DOIN_MOTORS_WEBHOOK_URL, payload, {
+        timeout: DOIN_MOTORS_FORWARD_TIMEOUT_MS,
+        headers: {
+          "Content-Type": "application/json",
+          "x-integration-source": "doin-motors",
+          "x-integration-lead-id": leadId,
+        },
+      });
+
+      return {
+        ok: true,
+        attempt,
+        status_code: response.status,
+        data: response.data,
+        latency_ms: Date.now() - startedAt,
+      };
+    } catch (errorObj) {
+      const formattedError = formatAxiosError(errorObj);
+      const statusCode = Number.isFinite(formattedError.status)
+        ? Number(formattedError.status)
+        : null;
+
+      lastFailure = {
+        attempt,
+        status_code: statusCode,
+        details: formattedError.data || null,
+        message: compactErrorMessage(
+          formattedError.data || errorObj?.message || errorObj
+        ),
+        latency_ms: Date.now() - startedAt,
+      };
+
+      const shouldRetry =
+        attempt < maxAttempts &&
+        (statusCode === null || statusCode >= 500 || statusCode === 429);
+      if (!shouldRetry) {
+        break;
+      }
+
+      const retryDelayMs = Math.min(2000, attempt * 400);
+      await wait(retryDelayMs);
+    }
+  }
+
+  return {
+    ok: false,
+    attempts: maxAttempts,
+    failure: lastFailure || {
+      message: "erro_desconhecido",
+    },
+  };
+}
+
+async function forwardMeliEventPayload(destinationUrl, payload, webhookId) {
+  const maxAttempts = MELI_FORWARD_RETRIES + 1;
+  let lastFailure = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const startedAt = Date.now();
+
+    try {
+      const response = await axios.post(destinationUrl, payload, {
+        timeout: MELI_FORWARD_TIMEOUT_MS,
+        headers: {
+          "Content-Type": "application/json",
+          "x-integration-source": "mercadolivre-webhook",
+          "x-integration-webhook-id": String(webhookId || ""),
+        },
+      });
+
+      return {
+        ok: true,
+        attempt,
+        status_code: response.status,
+        data: response.data,
+        latency_ms: Date.now() - startedAt,
+      };
+    } catch (errorObj) {
+      const formattedError = formatAxiosError(errorObj);
+      const statusCode = Number.isFinite(formattedError.status)
+        ? Number(formattedError.status)
+        : null;
+
+      lastFailure = {
+        attempt,
+        status_code: statusCode,
+        details: formattedError.data || null,
+        message: compactErrorMessage(
+          formattedError.data || errorObj?.message || errorObj
+        ),
+        latency_ms: Date.now() - startedAt,
+      };
+
+      const shouldRetry =
+        attempt < maxAttempts &&
+        (statusCode === null || statusCode >= 500 || statusCode === 429);
+      if (!shouldRetry) {
+        break;
+      }
+
+      const retryDelayMs = Math.min(2000, attempt * 400);
+      await wait(retryDelayMs);
+    }
+  }
+
+  return {
+    ok: false,
+    attempts: maxAttempts,
+    failure: lastFailure || {
+      message: "erro_desconhecido",
+    },
+  };
+}
+
 function buildWebhookRecord(payload, req, validationErrors) {
   const safePayload = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
   const topic = safePayload && typeof safePayload.topic === "string" ? safePayload.topic.trim() : "";
@@ -420,6 +759,15 @@ function buildWebhookRecord(payload, req, validationErrors) {
     error_message: null,
     resource_status_code: null,
     resource_latency_ms: null,
+    forwarding_enabled: false,
+    forwarding_user_id: null,
+    forwarding_status: "pending",
+    forwarding_destination: null,
+    forwarding_attempts: 0,
+    forwarding_http_status: null,
+    forwarding_latency_ms: null,
+    forwarding_sent_at: null,
+    forwarding_error_message: null,
     validation_errors: validationErrors,
     payload: payload || null,
     request_meta: {
@@ -528,10 +876,10 @@ async function refreshTokenBundle(storedTokens, persistOnDisk = true) {
     refresh_token: storedTokens.refresh_token,
   });
 
-  const mergedTokens = {
+  const mergedTokens = normalizeTokenTimestamps({
     ...storedTokens,
     ...refreshResponse,
-  };
+  });
 
   if (persistOnDisk) {
     return writeTokens(mergedTokens);
@@ -646,6 +994,91 @@ function toNullableNumber(value) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeHttpUrl(value) {
+  const raw = toNullableString(value);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch (_errorObj) {
+    return null;
+  }
+}
+
+function getIntegrationProfileByUserId(userId) {
+  const normalizedUserId = toNullableNumber(userId);
+  if (normalizedUserId === null) {
+    return null;
+  }
+
+  const records = readIntegrations();
+  const userKey = String(normalizedUserId);
+  return records.find((record) => String(record?.mercadolivre_user_id || "") === userKey) || null;
+}
+
+function upsertIntegrationForwardWebhookByUserId(userId, webhookUrl, source = "admin_manual") {
+  const normalizedUserId = toNullableNumber(userId);
+  if (normalizedUserId === null) {
+    throw new Error("user_id_invalido");
+  }
+
+  const normalizedWebhookUrl = normalizeHttpUrl(webhookUrl);
+  const records = readIntegrations();
+  const userKey = String(normalizedUserId);
+  const index = records.findIndex((record) => String(record?.mercadolivre_user_id || "") === userKey);
+  const existingRecord = index >= 0 ? records[index] : null;
+  const nowIso = new Date().toISOString();
+
+  const normalizedRecord = {
+    id: existingRecord?.id || generateRecordId(),
+    client_id: toNullableString(existingRecord?.client_id),
+    mercadolivre_user_id: normalizedUserId,
+    store_nickname: toNullableString(existingRecord?.store_nickname),
+    owner_first_name: toNullableString(existingRecord?.owner_first_name),
+    owner_last_name: toNullableString(existingRecord?.owner_last_name),
+    owner_name: toNullableString(existingRecord?.owner_name),
+    email: toNullableString(existingRecord?.email),
+    business_name: toNullableString(existingRecord?.business_name),
+    brand_name: toNullableString(existingRecord?.brand_name),
+    account_type: toNullableString(existingRecord?.account_type),
+    identification_type: toNullableString(existingRecord?.identification_type),
+    cnpj: toNullableString(existingRecord?.cnpj),
+    city: toNullableString(existingRecord?.city),
+    state: toNullableString(existingRecord?.state),
+    reputation_level: toNullableString(existingRecord?.reputation_level),
+    seller_experience: toNullableString(existingRecord?.seller_experience),
+    account_created_at: toNullableString(existingRecord?.account_created_at),
+    access_token_preview: toNullableString(existingRecord?.access_token_preview),
+    refresh_token_preview: toNullableString(existingRecord?.refresh_token_preview),
+    token_expires_at: toNullableString(existingRecord?.token_expires_at),
+    scope: toNullableString(existingRecord?.scope),
+    integration_status: toNullableString(existingRecord?.integration_status),
+    source: toNullableString(existingRecord?.source) || source,
+    raw_user_payload: existingRecord?.raw_user_payload ?? null,
+    created_at: toNullableString(existingRecord?.created_at) || nowIso,
+    updated_at: nowIso,
+    last_enriched_at: toNullableString(existingRecord?.last_enriched_at),
+    lead_forward_webhook_url: normalizedWebhookUrl,
+    lead_forward_updated_at: nowIso,
+  };
+
+  if (index >= 0) {
+    records[index] = normalizedRecord;
+  } else {
+    records.push(normalizedRecord);
+  }
+
+  writeIntegrations(records);
+  return normalizedRecord;
 }
 
 function extractAddressState(addressStateValue) {
@@ -769,6 +1202,8 @@ function buildIntegrationProfileFromUserMe(userPayload, tokens, existingRecord =
     created_at: toNullableString(existingRecord?.created_at) || nowIso,
     updated_at: nowIso,
     last_enriched_at: nowIso,
+    lead_forward_webhook_url: normalizeHttpUrl(existingRecord?.lead_forward_webhook_url),
+    lead_forward_updated_at: toNullableString(existingRecord?.lead_forward_updated_at),
   };
 }
 
@@ -799,6 +1234,11 @@ function buildIntegrationProfileProjection(profileRecord) {
   }
 
   const accountType = toNullableString(profileRecord.account_type) || "nao_informado";
+  const forwardWebhookUrl = normalizeHttpUrl(profileRecord.lead_forward_webhook_url);
+  const profileExpiry = toNullableString(profileRecord.token_expires_at);
+  const resolvedIntegrationStatus = profileExpiry
+    ? (tokenIsExpired({ expires_at: profileExpiry }) ? "Expirada" : "Ativa")
+    : toNullableString(profileRecord.integration_status);
   return {
     mercadolivre_user_id: profileRecord.mercadolivre_user_id ?? null,
     store_nickname: toNullableString(profileRecord.store_nickname),
@@ -822,9 +1262,12 @@ function buildIntegrationProfileProjection(profileRecord) {
     reputation_level: toNullableString(profileRecord.reputation_level),
     seller_experience: toNullableString(profileRecord.seller_experience),
     account_created_at: toNullableString(profileRecord.account_created_at),
-    token_expires_at: toNullableString(profileRecord.token_expires_at),
-    integration_status: toNullableString(profileRecord.integration_status),
+    token_expires_at: profileExpiry,
+    integration_status: resolvedIntegrationStatus,
     last_enriched_at: toNullableString(profileRecord.last_enriched_at),
+    lead_forward_webhook_url: forwardWebhookUrl,
+    lead_forward_enabled: Boolean(forwardWebhookUrl),
+    lead_forward_updated_at: toNullableString(profileRecord.lead_forward_updated_at),
   };
 }
 
@@ -1080,6 +1523,9 @@ async function enrichIntegrationProfilesFromAuthorizations(authorizations, curre
           persistRefreshToMainStore: candidate.persist_refresh,
         }
       );
+      if (candidate.authorization_id && enrichment.tokens) {
+        updateAuthorizationRecordTokens(candidate.authorization_id, enrichment.tokens);
+      }
       if (enrichment.refreshed) {
         refreshedCount += 1;
       }
@@ -1179,17 +1625,112 @@ async function processWebhookRecord(webhookId) {
     const { response, normalizedResource } = await fetchWebhookResource(currentRecord.resource);
     const nowIso = new Date().toISOString();
     const latencyMs = Date.now() - processingStartedAt;
+    const resourceId = extractResourceId(normalizedResource.path);
 
     appendWebhookEvent({
       id: generateRecordId(),
       webhook_id: webhookId,
       topic: currentRecord.topic || null,
       resource: normalizedResource.path,
-      resource_id: extractResourceId(normalizedResource.path),
+      resource_id: resourceId,
       status_code: response.status,
       data: response.data,
       created_at: nowIso,
     });
+
+    const resolvedForwardingUserId = resolveWebhookUserId(currentRecord, {
+      data: response.data,
+    });
+    const integrationProfile = resolvedForwardingUserId === null
+      ? null
+      : getIntegrationProfileByUserId(resolvedForwardingUserId);
+    const forwardWebhookUrl = normalizeHttpUrl(integrationProfile?.lead_forward_webhook_url);
+    let forwardingPatch = {
+      forwarding_enabled: Boolean(forwardWebhookUrl),
+      forwarding_user_id: resolvedForwardingUserId,
+      forwarding_status: forwardWebhookUrl ? "pending" : "disabled",
+      forwarding_destination: forwardWebhookUrl,
+      forwarding_attempts: 0,
+      forwarding_http_status: null,
+      forwarding_latency_ms: null,
+      forwarding_sent_at: null,
+      forwarding_error_message: null,
+    };
+
+    if (forwardWebhookUrl) {
+      const profileProjection = buildIntegrationProfileProjection(integrationProfile);
+      const forwardPayload = {
+        source: "mercadolivre_webhook",
+        forwarded_at: nowIso,
+        integration: {
+          mercadolivre_user_id: resolvedForwardingUserId,
+          store_nickname: profileProjection?.store_nickname || null,
+          owner_name: profileProjection?.owner_name || null,
+          email: profileProjection?.email || null,
+        },
+        webhook: {
+          id: webhookId,
+          topic: currentRecord.topic || null,
+          resource: normalizedResource.path,
+          resource_id: resourceId,
+          received_at: currentRecord.received_at || null,
+          payload: currentRecord.payload || null,
+        },
+        event: {
+          status_code: response.status,
+          data: response.data,
+        },
+      };
+
+      const forwardResult = await forwardMeliEventPayload(
+        forwardWebhookUrl,
+        forwardPayload,
+        webhookId
+      );
+
+      if (forwardResult.ok) {
+        forwardingPatch = {
+          ...forwardingPatch,
+          forwarding_status: "forwarded",
+          forwarding_attempts: forwardResult.attempt,
+          forwarding_http_status: forwardResult.status_code,
+          forwarding_latency_ms: forwardResult.latency_ms,
+          forwarding_sent_at: new Date().toISOString(),
+          forwarding_error_message: null,
+        };
+
+        appendWebhookProcessLog("webhook_repassado", {
+          webhook_id: webhookId,
+          topic: currentRecord.topic || null,
+          resource: normalizedResource.path,
+          destination_url: forwardWebhookUrl,
+          user_id: resolvedForwardingUserId,
+          status_code: forwardResult.status_code,
+          attempt: forwardResult.attempt,
+          latency_ms: forwardResult.latency_ms,
+        });
+      } else {
+        forwardingPatch = {
+          ...forwardingPatch,
+          forwarding_status: "forward_error",
+          forwarding_attempts: forwardResult.attempts,
+          forwarding_http_status: forwardResult.failure?.status_code || null,
+          forwarding_latency_ms: forwardResult.failure?.latency_ms || null,
+          forwarding_sent_at: null,
+          forwarding_error_message: forwardResult.failure?.message || "erro_desconhecido",
+        };
+
+        appendWebhookProcessLog("erro_repassar_webhook", {
+          webhook_id: webhookId,
+          topic: currentRecord.topic || null,
+          resource: normalizedResource.path,
+          destination_url: forwardWebhookUrl,
+          user_id: resolvedForwardingUserId,
+          attempts: forwardResult.attempts,
+          details: forwardResult.failure || null,
+        });
+      }
+    }
 
     updateWebhookRecord(webhookId, {
       resource: normalizedResource.path,
@@ -1199,6 +1740,7 @@ async function processWebhookRecord(webhookId) {
       resource_status_code: response.status,
       resource_latency_ms: latencyMs,
       error_message: null,
+      ...forwardingPatch,
     });
 
     appendWebhookProcessLog("webhook_processado", {
@@ -1207,6 +1749,9 @@ async function processWebhookRecord(webhookId) {
       resource: normalizedResource.path,
       status_code: response.status,
       latency_ms: latencyMs,
+      forwarding_status: forwardingPatch.forwarding_status,
+      forwarding_destination: forwardingPatch.forwarding_destination,
+      forwarding_http_status: forwardingPatch.forwarding_http_status,
     });
   } catch (errorObj) {
     const formattedError = formatAxiosError(errorObj);
@@ -1221,6 +1766,7 @@ async function processWebhookRecord(webhookId) {
       resource_status_code: formattedError.status || null,
       resource_latency_ms: latencyMs,
       error_message: errorMessage,
+      forwarding_status: "resource_error",
     });
 
     appendWebhookProcessLog("erro_consulta_api", {
@@ -1277,6 +1823,15 @@ function hasUsableTokens(tokens) {
   return Boolean(tokens && tokens.access_token);
 }
 
+function resolveStatusFromExpiry(expiresAtValue) {
+  const expiresAt = toNullableString(expiresAtValue);
+  if (!expiresAt) {
+    return "Sem expiracao";
+  }
+
+  return tokenIsExpired({ expires_at: expiresAt }) ? "Expirado" : "Ativo";
+}
+
 function formatTimestamp(value) {
   if (!value) {
     return "Nao disponivel";
@@ -1291,11 +1846,93 @@ function formatTimestamp(value) {
 }
 
 function getAuthorizationStatus(record) {
-  if (!record || !record.expires_at) {
-    return "Sem expiracao";
+  return resolveStatusFromExpiry(record?.expires_at);
+}
+
+function resolveEffectiveAuthorizationStatus(
+  record,
+  profileProjection,
+  currentTokens,
+  currentTokenUserId
+) {
+  const recordUserId = toNullableNumber(record?.user_id);
+  if (
+    recordUserId !== null &&
+    currentTokenUserId !== null &&
+    recordUserId === currentTokenUserId &&
+    hasUsableTokens(currentTokens) &&
+    !tokenIsExpired(currentTokens)
+  ) {
+    return "Ativo";
   }
 
-  return tokenIsExpired(record) ? "Expirado" : "Ativo";
+  const profileExpiry = toNullableString(profileProjection?.token_expires_at);
+  if (profileExpiry) {
+    return resolveStatusFromExpiry(profileExpiry);
+  }
+
+  return getAuthorizationStatus(record);
+}
+
+async function ensureValidStoredTokens({
+  refreshIfExpired = true,
+  enrichProfileOnRefresh = false,
+  source = "auto_refresh",
+} = {}) {
+  const storedTokens = readTokens();
+  if (!storedTokens || !storedTokens.access_token) {
+    return {
+      tokens: storedTokens,
+      refreshed: false,
+      refresh_error: null,
+    };
+  }
+
+  if (!refreshIfExpired || !tokenIsExpired(storedTokens)) {
+    return {
+      tokens: storedTokens,
+      refreshed: false,
+      refresh_error: null,
+    };
+  }
+
+  if (!storedTokens.refresh_token) {
+    return {
+      tokens: storedTokens,
+      refreshed: false,
+      refresh_error: "refresh_token_ausente",
+    };
+  }
+
+  try {
+    const refreshedTokens = await refreshStoredTokens(storedTokens);
+    let enrichmentWarning = null;
+
+    if (enrichProfileOnRefresh) {
+      try {
+        await enrichIntegrationProfileFromTokens(refreshedTokens, source, {
+          persistRefreshToMainStore: true,
+        });
+      } catch (enrichmentError) {
+        enrichmentWarning = compactErrorMessage(
+          enrichmentError?.message || enrichmentError
+        );
+      }
+    }
+
+    return {
+      tokens: refreshedTokens,
+      refreshed: true,
+      refresh_error: null,
+      enrichment_warning: enrichmentWarning,
+    };
+  } catch (errorObj) {
+    return {
+      tokens: storedTokens,
+      refreshed: false,
+      refresh_error: compactErrorMessage(errorObj?.message || errorObj),
+    };
+  }
 }
 
 function countScopes(scopeValue) {
@@ -1531,10 +2168,18 @@ function buildRootPayload(configErrors = getConfigErrors()) {
     notifications_path: NOTIFICATIONS_PATH,
     webhook_path: WEBHOOK_PATH,
     webhook_paths: WEBHOOK_ROUTE_PATHS,
+    doin_motors_leads_path: DOIN_MOTORS_LEADS_PATH,
+    doin_motors_webhook_url: DOIN_MOTORS_WEBHOOK_URL,
+    doin_motors_forward_timeout_ms: DOIN_MOTORS_FORWARD_TIMEOUT_MS,
+    doin_motors_forward_retries: DOIN_MOTORS_FORWARD_RETRIES,
+    doin_motors_forward_log_file: DOIN_MOTORS_FORWARD_LOG_FILE,
+    meli_forward_timeout_ms: MELI_FORWARD_TIMEOUT_MS,
+    meli_forward_retries: MELI_FORWARD_RETRIES,
     notifications_url: NOTIFICATIONS_URL || null,
     webhook_dashboard_path: WEBHOOK_DASHBOARD_PATH,
     webhook_dashboard_enabled: Boolean(ADMIN_DASHBOARD_TOKEN),
     admin_dashboard_path: ADMIN_DASHBOARD_PATH,
+    admin_integration_forward_path: ADMIN_INTEGRATION_FORWARD_PATH,
     admin_dashboard_enabled: Boolean(ADMIN_DASHBOARD_TOKEN),
     admin_enrichment_path: `${ADMIN_DASHBOARD_PATH}/enrich`,
     integrations_file: INTEGRATIONS_FILE,
@@ -2001,22 +2646,6 @@ function buildAdminDashboardPayload(
     const rightTime = new Date(right.authorized_at || 0).getTime();
     return rightTime - leftTime;
   });
-  const statusCounters = sortedAuthorizations.reduce(
-    (counters, record) => {
-      const status = getAuthorizationStatus(record);
-
-      if (status === "Ativo") {
-        counters.active += 1;
-      } else if (status === "Expirado") {
-        counters.expired += 1;
-      } else {
-        counters.timeless += 1;
-      }
-
-      return counters;
-    },
-    { active: 0, expired: 0, timeless: 0 }
-  );
 
   const totalAuthorizations = sortedAuthorizations.length;
   const sortedProfiles = [...integrationProfiles].sort((left, right) => {
@@ -2030,9 +2659,6 @@ function buildAdminDashboardPayload(
       .filter((record) => record.user_id !== null && record.user_id !== undefined)
       .map((record) => String(record.user_id))
   ).size;
-  const activePercent = toPercent(statusCounters.active, totalAuthorizations);
-  const expiredPercent = toPercent(statusCounters.expired, totalAuthorizations);
-  const timelessPercent = toPercent(statusCounters.timeless, totalAuthorizations);
   const currentTokenUserId = toNullableNumber(tokens?.user_id);
   const currentProfile = currentTokenUserId === null
     ? null
@@ -2070,6 +2696,12 @@ function buildAdminDashboardPayload(
     const profileProjection = buildIntegrationProfileProjection(profileRecord);
     const accessTokenPreview = toNullableString(record?.access_token_preview) || maskToken(record?.access_token);
     const refreshTokenPreview = toNullableString(record?.refresh_token_preview) || maskToken(record?.refresh_token);
+    const effectiveStatus = resolveEffectiveAuthorizationStatus(
+      record,
+      profileProjection,
+      tokens,
+      currentTokenUserId
+    );
 
     return {
       id: toNullableString(record?.id) || generateRecordId(),
@@ -2080,7 +2712,7 @@ function buildAdminDashboardPayload(
       access_token_preview: accessTokenPreview,
       refresh_token_preview: refreshTokenPreview,
       has_saved_tokens: Boolean(toNullableString(record?.access_token) || toNullableString(record?.refresh_token)),
-      status: getAuthorizationStatus(record),
+      status: effectiveStatus,
       scope_count: countScopes(record.scope || ""),
       scope_summary: summarizeScope(record.scope || "", 4),
       has_profile: Boolean(profileProjection),
@@ -2102,8 +2734,28 @@ function buildAdminDashboardPayload(
       reputation_level: profileProjection?.reputation_level || null,
       seller_experience: profileProjection?.seller_experience || null,
       account_created_at: profileProjection?.account_created_at || null,
+      lead_forward_webhook_url: profileProjection?.lead_forward_webhook_url || null,
+      lead_forward_enabled: Boolean(profileProjection?.lead_forward_enabled),
+      lead_forward_updated_at: profileProjection?.lead_forward_updated_at || null,
     };
   });
+  const statusCounters = mappedAuthorizations.reduce(
+    (counters, record) => {
+      if (record.status === "Ativo") {
+        counters.active += 1;
+      } else if (record.status === "Expirado") {
+        counters.expired += 1;
+      } else {
+        counters.timeless += 1;
+      }
+
+      return counters;
+    },
+    { active: 0, expired: 0, timeless: 0 }
+  );
+  const activePercent = toPercent(statusCounters.active, totalAuthorizations);
+  const expiredPercent = toPercent(statusCounters.expired, totalAuthorizations);
+  const timelessPercent = toPercent(statusCounters.timeless, totalAuthorizations);
 
   return {
     configured: configErrors.length === 0,
@@ -2113,6 +2765,7 @@ function buildAdminDashboardPayload(
     dashboard_enabled: Boolean(ADMIN_DASHBOARD_TOKEN),
     webhook_dashboard_path: WEBHOOK_DASHBOARD_PATH,
     public_webhook_dashboard_path: PUBLIC_WEBHOOK_DASHBOARD_PATH,
+    admin_integration_forward_path: ADMIN_INTEGRATION_FORWARD_PATH,
     webhook_paths: WEBHOOK_ROUTE_PATHS,
     authorizations_file: AUTHORIZATIONS_FILE,
     integrations_file: INTEGRATIONS_FILE,
@@ -2553,9 +3206,14 @@ app.post("/auth/refresh", async (req, res) => {
   }
 });
 
-app.get("/auth/status", (req, res) => {
+app.get("/auth/status", async (req, res) => {
   try {
-    const tokens = readTokens();
+    const tokenState = await ensureValidStoredTokens({
+      refreshIfExpired: true,
+      enrichProfileOnRefresh: true,
+      source: "auth_status_auto_refresh",
+    });
+    const tokens = tokenState.tokens;
     const configErrors = getConfigErrors();
     const webhookRecords = readWebhookRecords();
     const webhookEvents = readWebhookEvents();
@@ -2576,6 +3234,14 @@ app.get("/auth/status", (req, res) => {
       notifications_path: NOTIFICATIONS_PATH,
       webhook_path: WEBHOOK_PATH,
       webhook_paths: WEBHOOK_ROUTE_PATHS,
+      doin_motors_leads_path: DOIN_MOTORS_LEADS_PATH,
+      doin_motors_webhook_url: DOIN_MOTORS_WEBHOOK_URL,
+      doin_motors_forward_timeout_ms: DOIN_MOTORS_FORWARD_TIMEOUT_MS,
+      doin_motors_forward_retries: DOIN_MOTORS_FORWARD_RETRIES,
+      doin_motors_forward_log_file: DOIN_MOTORS_FORWARD_LOG_FILE,
+      doin_motors_inbound_token_enabled: Boolean(DOIN_MOTORS_INBOUND_TOKEN),
+      meli_forward_timeout_ms: MELI_FORWARD_TIMEOUT_MS,
+      meli_forward_retries: MELI_FORWARD_RETRIES,
       notifications_url: NOTIFICATIONS_URL || null,
       notifications_file: NOTIFICATIONS_FILE,
       webhooks_file: WEBHOOKS_FILE,
@@ -2596,9 +3262,13 @@ app.get("/auth/status", (req, res) => {
       current_integration_profile: buildIntegrationProfileProjection(currentUserProfile),
       authorizations_file: AUTHORIZATIONS_FILE,
       admin_dashboard_path: ADMIN_DASHBOARD_PATH,
+      admin_integration_forward_path: ADMIN_INTEGRATION_FORWARD_PATH,
       admin_dashboard_enabled: Boolean(ADMIN_DASHBOARD_TOKEN),
       total_authorizations: readAuthorizations().length,
       tokens: tokenPreview(tokens),
+      token_auto_refreshed: tokenState.refreshed,
+      token_auto_refresh_error: tokenState.refresh_error || null,
+      token_auto_enrichment_warning: tokenState.enrichment_warning || null,
     });
   } catch (errorObj) {
     res.status(500).json({
@@ -2606,6 +3276,100 @@ app.get("/auth/status", (req, res) => {
       message: errorObj.message,
     });
   }
+});
+
+app.get(DOIN_MOTORS_LEADS_PATH, (req, res) => {
+  res.json({
+    message: "Endpoint de leads Doin Motors ativo",
+    method: "POST",
+    route_path: DOIN_MOTORS_LEADS_PATH,
+    forward_webhook_url: DOIN_MOTORS_WEBHOOK_URL,
+    forward_timeout_ms: DOIN_MOTORS_FORWARD_TIMEOUT_MS,
+    forward_retries: DOIN_MOTORS_FORWARD_RETRIES,
+    inbound_token_enabled: Boolean(DOIN_MOTORS_INBOUND_TOKEN),
+    forward_log_file: DOIN_MOTORS_FORWARD_LOG_FILE,
+  });
+});
+
+app.post(DOIN_MOTORS_LEADS_PATH, async (req, res) => {
+  if (!ensureDoinInboundAccess(req, res)) {
+    return;
+  }
+
+  const validationErrors = validateDoinLeadPayload(req.body);
+  const leadId = generateRecordId();
+  const receivedAt = new Date().toISOString();
+
+  appendDoinLeadForwardLog("lead_recebido", {
+    lead_id: leadId,
+    route_path: DOIN_MOTORS_LEADS_PATH,
+    received_at: receivedAt,
+    payload: req.body || null,
+    ip: getRequestIp(req),
+    user_agent: req.headers["user-agent"] || null,
+    x_forwarded_for: req.headers["x-forwarded-for"] || null,
+    x_real_ip: req.headers["x-real-ip"] || null,
+  });
+
+  if (validationErrors.length > 0) {
+    appendDoinLeadForwardLog("lead_rejeitado", {
+      lead_id: leadId,
+      route_path: DOIN_MOTORS_LEADS_PATH,
+      reason: "payload_invalido",
+      validation_errors: validationErrors,
+      payload: req.body || null,
+    });
+
+    res.status(400).json({
+      ok: false,
+      error: "invalid_payload",
+      validation_errors: validationErrors,
+      message: "Payload invalido. Envie um objeto JSON com os dados do lead.",
+      lead_id: leadId,
+    });
+    return;
+  }
+
+  const forwardResult = await forwardDoinLeadPayload(req.body, leadId);
+  if (forwardResult.ok) {
+    appendDoinLeadForwardLog("lead_encaminhado", {
+      lead_id: leadId,
+      route_path: DOIN_MOTORS_LEADS_PATH,
+      destination_url: DOIN_MOTORS_WEBHOOK_URL,
+      status_code: forwardResult.status_code,
+      attempt: forwardResult.attempt,
+      latency_ms: forwardResult.latency_ms,
+      response: forwardResult.data || null,
+    });
+
+    res.json({
+      ok: true,
+      message: "Lead recebido e encaminhado com sucesso.",
+      lead_id: leadId,
+      destination_url: DOIN_MOTORS_WEBHOOK_URL,
+      attempt: forwardResult.attempt,
+      status_code: forwardResult.status_code,
+    });
+    return;
+  }
+
+  appendDoinLeadForwardLog("erro_encaminhamento_lead", {
+    lead_id: leadId,
+    route_path: DOIN_MOTORS_LEADS_PATH,
+    destination_url: DOIN_MOTORS_WEBHOOK_URL,
+    attempts: forwardResult.attempts,
+    failure: forwardResult.failure,
+  });
+
+  res.status(502).json({
+    ok: false,
+    error: "lead_forward_failed",
+    message: "Falha ao encaminhar lead para o webhook configurado.",
+    lead_id: leadId,
+    destination_url: DOIN_MOTORS_WEBHOOK_URL,
+    attempts: forwardResult.attempts,
+    failure: forwardResult.failure,
+  });
 });
 
 WEBHOOK_ROUTE_PATHS.forEach((routePath) => {
@@ -2662,6 +3426,65 @@ app.get(WEBHOOK_DASHBOARD_PATH, (req, res) => {
     res.status(500).json({
       error: "webhook_dashboard_failed",
       message: errorObj.message,
+    });
+  }
+});
+
+app.post(ADMIN_INTEGRATION_FORWARD_PATH, (req, res) => {
+  if (!ensureAdminDashboardAccess(req, res)) {
+    return;
+  }
+
+  try {
+    const payload = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+      ? req.body
+      : {};
+    const userId = toNullableNumber(payload.user_id);
+    if (userId === null) {
+      res.status(400).json({
+        ok: false,
+        error: "invalid_user_id",
+        message: "Informe user_id numerico para atualizar o webhook de direcionamento.",
+      });
+      return;
+    }
+
+    const rawWebhookValue = Object.prototype.hasOwnProperty.call(payload, "webhook_url")
+      ? payload.webhook_url
+      : payload.lead_forward_webhook_url;
+    const webhookUrlInput = toNullableString(rawWebhookValue);
+    if (webhookUrlInput && !normalizeHttpUrl(webhookUrlInput)) {
+      res.status(400).json({
+        ok: false,
+        error: "invalid_webhook_url",
+        message: "Webhook de direcionamento invalido. Use uma URL HTTP(S) valida.",
+      });
+      return;
+    }
+
+    const updatedRecord = upsertIntegrationForwardWebhookByUserId(
+      userId,
+      webhookUrlInput,
+      "admin_webhook_forward"
+    );
+    const profileProjection = buildIntegrationProfileProjection(updatedRecord);
+    const normalizedWebhookUrl = profileProjection?.lead_forward_webhook_url || null;
+
+    res.json({
+      ok: true,
+      message: normalizedWebhookUrl
+        ? "Webhook de direcionamento atualizado com sucesso."
+        : "Webhook de direcionamento removido com sucesso.",
+      user_id: userId,
+      webhook_url: normalizedWebhookUrl,
+      lead_forward_updated_at: profileProjection?.lead_forward_updated_at || null,
+      profile: profileProjection,
+    });
+  } catch (errorObj) {
+    res.status(500).json({
+      ok: false,
+      error: "integration_forward_update_failed",
+      message: compactErrorMessage(errorObj?.message || errorObj),
     });
   }
 });
@@ -2725,7 +3548,7 @@ app.post(`${ADMIN_DASHBOARD_PATH}/enrich`, async (req, res) => {
   }
 });
 
-app.get(ADMIN_DASHBOARD_PATH, (req, res) => {
+app.get(ADMIN_DASHBOARD_PATH, async (req, res) => {
   if (!ensureAdminDashboardAccess(req, res)) {
     return;
   }
@@ -2739,7 +3562,12 @@ app.get(ADMIN_DASHBOARD_PATH, (req, res) => {
   }
 
   try {
-    const tokens = readTokens();
+    const tokenState = await ensureValidStoredTokens({
+      refreshIfExpired: true,
+      enrichProfileOnRefresh: true,
+      source: "admin_dashboard_auto_refresh",
+    });
+    const tokens = tokenState.tokens;
     const authorizations = readAuthorizations();
     const integrationProfiles = readIntegrations();
     const apiLogs = readMeliApiLogs();
@@ -2852,6 +3680,25 @@ app.use((error, req, res, next) => {
     }
 
     res.status(200).end();
+    return;
+  }
+
+  if (isJsonSyntaxError && isDoinMotorsLeadsRoutePath(req.path)) {
+    try {
+      appendDoinLeadForwardLog("lead_rejeitado", {
+        route_path: req.path,
+        reason: "json_invalido",
+        details: compactErrorMessage(error.message || "json_invalido"),
+      });
+    } catch (_logError) {
+      // No-op: fallback para garantir resposta consistente.
+    }
+
+    res.status(400).json({
+      ok: false,
+      error: "invalid_json",
+      message: "Payload JSON invalido.",
+    });
     return;
   }
 

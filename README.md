@@ -20,6 +20,8 @@ Repositorio de destino no GitHub:
   `https://integrador.zoitech.com.br/meli/mercadolivre/webhook`
 - URL legacy de notificacoes (alias):
   `https://integrador.zoitech.com.br/meli/notifications`
+- URL de entrada de leads Doin Motors:
+  `https://integrador.zoitech.com.br/meli/doin-motors/leads`
 
 ## Endpoints da API local
 
@@ -31,11 +33,14 @@ Repositorio de destino no GitHub:
 - `GET /auth/status` status de configuracao/token
 - `GET /admin/integrations` dashboard HTML/JSON das autorizacoes
 - `POST /admin/integrations/enrich` forca enriquecimento dos dados da conta atual via `/users/me`
+- `POST /admin/integrations/webhook-forward` atualiza/remova webhook de direcionamento por `user_id`
 - `GET /integracoes/mercadolivre/webhooks` dashboard HTML/JSON dos webhooks
 - `GET /mercadolivre/webhook` status do endpoint principal de webhook
 - `POST /mercadolivre/webhook` recebe webhook e processa recurso em background
 - `GET /notifications` status do endpoint legacy (alias)
 - `POST /notifications` alias legado para recepcao de webhook
+- `GET /doin-motors/leads` status do endpoint de entrada Doin Motors
+- `POST /doin-motors/leads` recebe lead da Doin Motors e encaminha para o webhook configurado
 - `GET /health` healthcheck
 
 ## Variaveis de ambiente
@@ -63,7 +68,15 @@ Recomendadas:
 - `MELI_WEBHOOKS_FILE` arquivo JSON dos webhooks recebidos
 - `MELI_WEBHOOK_EVENTS_FILE` arquivo JSON dos eventos completos consultados na API
 - `MELI_WEBHOOK_PROCESS_LOG_FILE` log NDJSON com `webhook_recebido`, `webhook_processado` e `erro_consulta_api`
+- `MELI_FORWARD_TIMEOUT_MS` timeout do repasse para webhook por integracao (default: `15000`)
+- `MELI_FORWARD_RETRIES` retries do repasse para webhook por integracao em 429/5xx (default: `2`)
 - `MELI_ADMIN_DASHBOARD_TOKEN` token usado no link administrativo
+- `DOIN_MOTORS_LEADS_PATH` rota de recepcao dos leads (default: `/doin-motors/leads`)
+- `DOIN_MOTORS_WEBHOOK_URL` webhook de destino para encaminhar cada lead recebido
+- `DOIN_MOTORS_FORWARD_TIMEOUT_MS` timeout da chamada para o webhook de destino (default: `15000`)
+- `DOIN_MOTORS_FORWARD_RETRIES` quantidade de retries para 429/5xx (default: `2`)
+- `DOIN_MOTORS_FORWARD_LOG_FILE` arquivo NDJSON de auditoria do encaminhamento
+- `DOIN_MOTORS_INBOUND_TOKEN` token opcional para proteger a rota de entrada (`x-doin-token` ou `Authorization: Bearer`)
 
 ## Execucao local
 
@@ -82,10 +95,32 @@ Testes rapidos:
 curl http://localhost:7254/health
 curl http://localhost:7254/auth/status
 curl http://localhost:7254/mercadolivre/webhook
+curl http://localhost:7254/doin-motors/leads
+curl -X POST "http://localhost:7254/admin/integrations/webhook-forward?token=SEU_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":123456789,"webhook_url":"https://seu-endpoint.com/webhook"}'
+curl -X POST http://localhost:7254/doin-motors/leads \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Lead Teste","phone":"+5511999999999","source":"doin_motors"}'
 curl "http://localhost:7254/admin/integrations?token=SEU_TOKEN&format=json"
 curl -X POST "http://localhost:7254/admin/integrations/enrich?token=SEU_TOKEN"
 curl "http://localhost:7254/integracoes/mercadolivre/webhooks?token=SEU_TOKEN&format=json"
 ```
+
+## Como visualizar localmente antes do deploy
+
+1. Configure um token administrativo no `.env`:
+   - `MELI_ADMIN_DASHBOARD_TOKEN=admin-local-teste`
+2. Suba o backend:
+   - `npm start`
+3. (Opcional) Gere o build da UI React do admin:
+   - `npm run build:admin-ui`
+4. Abra o dashboard:
+   - `http://localhost:7254/admin/integrations?token=admin-local-teste`
+5. Em um card de integracao, preencha "Webhook de direcionamento" e clique em salvar.
+6. Confirme no JSON da API:
+   - `http://localhost:7254/admin/integrations?token=admin-local-teste&format=json`
+7. Envie um webhook de teste para `/mercadolivre/webhook` e verifique o repasse no endpoint configurado.
 
 Fluxo OAuth:
 
@@ -143,6 +178,7 @@ Fluxo implementado:
    - valida payload;
    - consulta `https://api.mercadolibre.com{resource}` com `Bearer`;
    - tenta refresh de token automaticamente em 401/expiracao;
+   - identifica a integracao (por `user_id`) e, se houver `webhook_forward_url` configurado, repassa o evento processado para esse endpoint;
    - salva evento completo em `MELI_WEBHOOK_EVENTS_FILE`;
    - registra logs em `MELI_WEBHOOK_PROCESS_LOG_FILE`.
 
@@ -151,6 +187,48 @@ Dashboard de webhooks:
 - Rota local: `http://localhost:7254/integracoes/mercadolivre/webhooks?token=SEU_TOKEN`
 - Rota publica: `https://integrador.zoitech.com.br/meli/integracoes/mercadolivre/webhooks?token=SEU_TOKEN`
 - Versao JSON: adicione `&format=json`
+
+## Webhook de direcionamento por integracao
+
+Configuracao:
+
+1. Acesse `GET /admin/integrations?token=SEU_TOKEN`.
+2. Em cada card de integracao, preencha o campo "Webhook de direcionamento".
+3. Clique em "Salvar webhook".
+4. Para remover, deixe o campo em branco e salve novamente.
+
+API de configuracao (alternativa ao frontend):
+
+- Endpoint: `POST /admin/integrations/webhook-forward?token=SEU_TOKEN`
+- Body:
+
+```json
+{
+  "user_id": 123456789,
+  "webhook_url": "https://seu-endpoint.com/webhook"
+}
+```
+
+Observacoes:
+
+- `webhook_url` aceita apenas HTTP(S).
+- Se `webhook_url` for vazio/nulo, a configuracao e removida.
+- O repasse usa `MELI_FORWARD_TIMEOUT_MS` e `MELI_FORWARD_RETRIES`.
+
+## Repasse de leads Doin Motors
+
+Fluxo implementado:
+
+1. `POST /doin-motors/leads` recebe o payload JSON da Doin Motors.
+2. O backend registra auditoria em `DOIN_MOTORS_FORWARD_LOG_FILE` (`lead_recebido`, `lead_encaminhado`, `erro_encaminhamento_lead`).
+3. O payload recebido e encaminhado em modo pass-through para `DOIN_MOTORS_WEBHOOK_URL`.
+4. Em caso de falha `429`/`5xx`, o backend tenta novamente conforme `DOIN_MOTORS_FORWARD_RETRIES`.
+5. Se todas as tentativas falharem, a API responde `HTTP 502` para permitir nova tentativa no provedor de origem.
+
+Seguranca opcional:
+
+- Defina `DOIN_MOTORS_INBOUND_TOKEN` para exigir token na entrada.
+- Header aceito: `x-doin-token: SEU_TOKEN` (ou `Authorization: Bearer SEU_TOKEN`).
 
 ## Enriquecimento de conta (/users/me)
 
